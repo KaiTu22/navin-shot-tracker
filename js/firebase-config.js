@@ -2,14 +2,14 @@
 // Firestore security rules (see firestore.rules), not by hiding this file.
 // Fill in the values from Firebase Console -> Project settings -> General -> Your apps.
 export const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME.appspot.com',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME'
+  apiKey: 'AIzaSyCIiBJasQxGu_p3IhWucr6tA8hgzRUVVgE',
+  authDomain: 'shot-tracker-6a7b8.firebaseapp.com',
+  projectId: 'shot-tracker-6a7b8',
+  storageBucket: 'shot-tracker-6a7b8.firebasestorage.app',
+  messagingSenderId: '494848183675',
+  appId: '1:494848183675:web:76642dba44522ad66401de'
 };
 
 // UID of the one tracker account (from Firebase Console -> Authentication -> Users),
 // used by firestore.rules to gate writes. Also fine to be public.
-export const TRACKER_UID = 'REPLACE_ME';
+export const TRACKER_UID = 'RBF5luSvWmhYtwDyi79jo3hxHAz1';
