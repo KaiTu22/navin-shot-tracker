@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>ShotTracker — Navin</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="phone-shell">
+
+      <section id="screen-missing-link" class="content hidden">
+        <div class="panel empty-state">This link is missing its game code — ask for a fresh share link.</div>
+      </section>
+
+      <!-- GAMES LIST -->
+      <section id="screen-games" class="content hidden">
+        <div class="page-header"><h1>Games</h1></div>
+        <div class="panel">
+          <div id="game-list" class="game-list"></div>
+        </div>
+      </section>
+
+      <!-- GAME SUMMARY -->
+      <section id="screen-summary" class="content hidden">
+        <div class="page-header">
+          <button class="link-button" data-nav="games">‹ Games</button>
+          <h1>Game summary</h1>
+          <span style="width:56px"></span>
+        </div>
+
+        <div class="panel">
+          <div class="summary-points">
+            <div class="points-total" id="summary-points">0</div>
+            <div class="meta">
+              <div class="name" id="summary-player-name">Navin</div>
+              <div class="opponent" id="summary-opponent"></div>
+            </div>
+          </div>
+          <div class="stat-grid" id="summary-stat-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Shot chart</span></div>
+          <div class="chart-tabs">
+            <button class="tab active" data-chart-mode="scatter">Scatter</button>
+            <button class="tab" data-chart-mode="zones">Zones</button>
+          </div>
+          <div class="court-wrap"><svg id="summary-court" class="readonly" role="img" aria-label="Basketball court"></svg></div>
+          <div class="shot-legend" id="summary-legend">
+            <span><span class="legend-dot make"></span>Make</span>
+            <span><span class="legend-dot miss"></span>Miss</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Insights</span></div>
+          <div class="insight-toggle">
+            <button class="filter-button active" data-view="all">All games</button>
+            <button class="filter-button" data-view="selected">This game</button>
+          </div>
+          <div id="summary-zone-grid" class="zone-grid"></div>
+          <div id="summary-trend" class="trend-list"></div>
+        </div>
+      </section>
+
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-nav="games">Games</button>
+        <button class="nav-item" data-nav="insights">Insights</button>
+      </nav>
+    </div>
+
+    <script type="module" src="js/player-app.js"></script>
+  </body>
+</html>

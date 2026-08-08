@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>ShotTracker — Tracker</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="phone-shell">
+
+      <!-- SIGN IN -->
+      <section id="screen-signin" class="content hidden">
+        <div class="page-header"><h1>Sign in</h1></div>
+        <div class="panel">
+          <form id="signin-form" class="signin-form">
+            <div class="form-field">
+              <label>Email</label>
+              <input id="signin-email" type="email" autocomplete="username" required />
+            </div>
+            <div class="form-field">
+              <label>Password</label>
+              <input id="signin-password" type="password" autocomplete="current-password" required />
+            </div>
+            <div id="signin-error" class="form-error"></div>
+            <button type="submit" class="primary-btn">Sign in</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- GAMES LIST -->
+      <section id="screen-games" class="content hidden">
+        <div class="page-header">
+          <h1>Games</h1>
+          <button id="sign-out-btn" class="text-button">Sign out</button>
+        </div>
+        <div class="panel">
+          <div id="game-list" class="game-list"></div>
+        </div>
+        <button id="new-game-open-btn" class="primary-btn">New game</button>
+
+        <div class="panel share-panel">
+          <div class="section-heading"><span>Share with player</span></div>
+          <div class="field-hint">Give this link to the player — it's read-only, updates live, and needs no login.</div>
+          <div class="share-link-row">
+            <input id="share-link-input" type="text" readonly />
+            <button id="copy-link-btn" class="copy-btn">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- NEW GAME -->
+      <section id="screen-new-game" class="content hidden">
+        <div class="page-header">
+          <button class="link-button" data-nav="games">‹ Games</button>
+          <h1>New game</h1>
+          <span style="width:56px"></span>
+        </div>
+        <div class="panel">
+          <div class="section-heading"><span>Player</span></div>
+          <div class="roster-row">
+            <div class="roster-avatar">N</div>
+            <span class="roster-name" id="new-game-player-name">Navin</span>
+          </div>
+        </div>
+        <form id="new-game-form" class="panel">
+          <div class="form-field"><label>Opponent</label><input id="ng-opponent" placeholder="e.g. Tigers" /></div>
+          <div class="form-field"><label>Venue</label><input id="ng-venue" placeholder="e.g. Westside Gym" /></div>
+          <div class="form-field"><label>League / Tourney</label><input id="ng-league" placeholder="e.g. AAU Spring" /></div>
+          <div class="form-field"><label>Date</label><input id="ng-date" type="date" /></div>
+          <div class="form-field"><label>Time</label><input id="ng-time" type="time" /></div>
+        </form>
+        <div class="panel">
+          <div class="section-heading"><span>Track by</span></div>
+          <div class="segmented-choice" id="period-mode-group">
+            <button type="button" data-mode="quarters">Quarters</button>
+            <button type="button" data-mode="halves">Halves</button>
+            <button type="button" data-mode="full" class="active">Full game</button>
+          </div>
+        </div>
+        <button id="start-tracking-btn" class="primary-btn">Start tracking</button>
+      </section>
+
+      <!-- LIVE TRACKING -->
+      <section id="screen-live" class="content hidden">
+        <div class="tracking-header">
+          <button class="link-button" data-nav="games">‹ Games</button>
+          <div class="actions">
+            <button id="undo-btn" class="chip-btn">Undo</button>
+            <button id="end-period-btn" class="chip-btn warn">End</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="player-summary-row">
+            <div class="player-badge">N</div>
+            <div class="name" id="live-player-name">Navin</div>
+            <div class="period-pts">
+              <span class="period-chip" id="live-period-chip"></span>
+              <span class="points-value" id="live-points">0</span>
+              <span class="points-label">pts</span>
+            </div>
+          </div>
+
+          <div class="stat-strip" id="live-stat-strip"></div>
+
+          <div class="court-wrap"><svg id="live-court" role="img" aria-label="Basketball court"></svg></div>
+          <div class="shot-legend">
+            <span><span class="legend-dot make"></span>Make</span>
+            <span><span class="legend-dot miss"></span>Miss</span>
+          </div>
+
+          <div class="shot-controls">
+            <div class="segmented" id="shot-result-group">
+              <button type="button" class="segment active make" data-result="make">Make</button>
+              <button type="button" class="segment miss" data-result="miss">Miss</button>
+            </div>
+            <div class="quick-events">
+              <button type="button" class="quick-action success" id="ft-make-btn">Free throw make</button>
+              <button type="button" class="quick-action danger" id="ft-miss-btn">Free throw miss</button>
+            </div>
+            <div class="quick-grid">
+              <button type="button" data-event="foul" data-sub="offensive"><span class="plus">+</span>Off foul</button>
+              <button type="button" data-event="block"><span class="plus">+</span>Block</button>
+              <button type="button" data-event="assist"><span class="plus">+</span>Assist</button>
+              <button type="button" data-event="rebound" data-sub="defensive"><span class="plus">+</span>Def reb</button>
+              <button type="button" data-event="foul" data-sub="defensive"><span class="plus">+</span>Def foul</button>
+              <button type="button" data-event="turnover"><span class="plus">+</span>Turnover</button>
+              <button type="button" data-event="steal"><span class="plus">+</span>Steal</button>
+              <button type="button" data-event="rebound" data-sub="offensive"><span class="plus">+</span>Off reb</button>
+            </div>
+          </div>
+        </div>
+
+        <button id="done-btn" class="primary-btn">Done — view summary</button>
+      </section>
+
+      <!-- GAME SUMMARY -->
+      <section id="screen-summary" class="content hidden">
+        <div class="page-header">
+          <button class="link-button" data-nav="games">‹ Games</button>
+          <h1>Game summary</h1>
+          <button class="link-button" data-nav="live">Edit</button>
+        </div>
+
+        <div class="panel">
+          <div class="summary-points">
+            <div class="points-total" id="summary-points">0</div>
+            <div class="meta">
+              <div class="name" id="summary-player-name">Navin</div>
+              <div class="opponent" id="summary-opponent"></div>
+            </div>
+          </div>
+          <div class="stat-grid" id="summary-stat-grid"></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Shot chart</span></div>
+          <div class="chart-tabs">
+            <button class="tab active" data-chart-mode="scatter">Scatter</button>
+            <button class="tab" data-chart-mode="zones">Zones</button>
+          </div>
+          <div class="court-wrap"><svg id="summary-court" role="img" aria-label="Basketball court"></svg></div>
+          <div class="shot-legend" id="summary-legend">
+            <span><span class="legend-dot make"></span>Make</span>
+            <span><span class="legend-dot miss"></span>Miss</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Insights</span></div>
+          <div class="insight-toggle">
+            <button class="filter-button active" data-view="all">All games</button>
+            <button class="filter-button" data-view="selected">This game</button>
+          </div>
+          <div id="summary-zone-grid" class="zone-grid"></div>
+          <div id="summary-trend" class="trend-list"></div>
+        </div>
+      </section>
+
+      <nav class="bottom-nav">
+        <button class="nav-item active" data-nav="games">Games</button>
+        <button class="nav-item" data-nav="insights">Insights</button>
+      </nav>
+    </div>
+
+    <script type="module" src="js/tracker-app.js"></script>
+  </body>
+</html>
