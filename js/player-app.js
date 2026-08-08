@@ -44,7 +44,7 @@ if (!scopeId) {
 }
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId, { canDelete: false });
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: false });
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
   if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
 }
@@ -76,7 +76,7 @@ document.querySelectorAll('.chart-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.chartMode = btn.dataset.chartMode;
     document.querySelectorAll('.chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
-    el('summary-legend').classList.toggle('hidden', state.chartMode === 'zones');
+    el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
     renderSummaryScreen();
   });
 });

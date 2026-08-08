@@ -99,7 +99,7 @@ el('sign-out-btn').addEventListener('click', () => signOutTracker());
 // --- Games updates drive whichever screen is visible ---
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId, { canDelete: true });
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: true });
   if (!el('screen-live').classList.contains('hidden')) renderLiveScreen();
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
   if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
@@ -125,6 +125,15 @@ el('game-list').addEventListener('click', (event) => {
     if (game && confirm(`Delete "${game.name}"? This can't be undone.`)) {
       deleteGame(state.scopeId, game.id);
       if (state.selectedGameId === game.id) state.selectedGameId = null;
+    }
+    return;
+  }
+  const resumeBtn = event.target.closest('[data-resume-id]');
+  if (resumeBtn) {
+    const game = state.games.find((g) => g.id === resumeBtn.dataset.resumeId);
+    if (game) {
+      updateGameMeta(state.scopeId, game.id, { status: 'live' });
+      openGame({ ...game, status: 'live' });
     }
     return;
   }
@@ -329,7 +338,7 @@ document.querySelectorAll('.chart-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.chartMode = btn.dataset.chartMode;
     document.querySelectorAll('.chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
-    el('summary-legend').classList.toggle('hidden', state.chartMode === 'zones');
+    el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
     renderSummaryScreen();
   });
 });

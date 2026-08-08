@@ -1,7 +1,7 @@
 // Shared render helpers used by both the tracker app and the read-only player app,
 // so the two views never drift out of sync on how a stat is computed or displayed.
 import { getShotSummary, getCountStats, getZoneStats } from './data-store.js';
-import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, ZONES } from './court.js';
+import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, drawHexbin, drawHeatmap, ZONES } from './court.js';
 
 export function formatPercent(value) {
   if (!Number.isFinite(value)) return '0%';
@@ -39,9 +39,12 @@ export function renderStatGrid(container, events) {
 
 export function renderShotChart(svgEl, events, mode) {
   drawCourt(svgEl);
-  removeZoneOverlay(svgEl);
   if (mode === 'zones') {
     drawZoneOverlay(svgEl, getZoneStats(events));
+  } else if (mode === 'hex') {
+    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'));
+  } else if (mode === 'heat') {
+    drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'));
   } else {
     drawShots(svgEl, events.filter((e) => e.type === 'shot'));
   }
@@ -114,7 +117,7 @@ export function renderTrend(container, games, selectedGameId) {
   container.innerHTML = rows.join('') + bestLine;
 }
 
-export function renderGameList(container, games, selectedGameId, { canDelete = false } = {}) {
+export function renderGameList(container, games, selectedGameId, { canManage = false } = {}) {
   if (!games.length) {
     container.innerHTML = '<div class="empty-state">No games yet.</div>';
     return;
@@ -124,7 +127,11 @@ export function renderGameList(container, games, selectedGameId, { canDelete = f
       const active = game.id === selectedGameId ? 'active' : '';
       const shotCount = (game.events || []).filter((e) => e.type === 'shot' || e.type === 'freeThrow').length;
       const statusBadge = game.status === 'live' ? '<span class="game-item__badge">Live</span>' : '';
-      const deleteBtn = canDelete
+      const resumeBtn =
+        canManage && game.status !== 'live'
+          ? `<button type="button" class="game-item__resume" data-resume-id="${game.id}">Resume</button>`
+          : '';
+      const deleteBtn = canManage
         ? `<button type="button" class="game-item__delete" data-delete-id="${game.id}" aria-label="Delete ${game.name}">Delete</button>`
         : '';
       return `
@@ -136,6 +143,7 @@ export function renderGameList(container, games, selectedGameId, { canDelete = f
           <span class="game-item__side">
             ${statusBadge}
             <span class="game-item__chip">${shotCount}</span>
+            ${resumeBtn}
             ${deleteBtn}
           </span>
         </div>

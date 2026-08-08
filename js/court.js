@@ -116,6 +116,12 @@ function restrictedAreaPath() {
 export function drawCourt(svg) {
   svg.setAttribute('viewBox', VIEW_BOX);
   svg.innerHTML = `
+    <defs>
+      <filter id="heat-blur" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="1" />
+      </filter>
+    </defs>
+
     <rect x="-3" y="-2" width="${COURT_WIDTH + 6}" height="${COURT_HEIGHT + 2}" fill="#d7c79e" />
 
     <path d="M 0 0 L ${COURT_WIDTH} 0" stroke="#f5f5f5" stroke-width="0.3" />
@@ -231,4 +237,148 @@ export function drawPendingMarker(svg, x, y) {
 export function removePendingMarker(svg) {
   const existing = svg.querySelector('#pending-shot-marker');
   if (existing) existing.remove();
+}
+
+// --- Hexbin chart: hexagon size = attempt volume, color = make% (same sequential ramp as Zones) ---
+
+const HEX_SIZE = 2.2; // feet, center-to-corner
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Flat-top axial hex grid (center-to-corner = HEX_SIZE). Standard pixel<->axial
+// conversion with cube-coordinate rounding so every shot lands in exactly one cell.
+function pixelToHex(x, y, size) {
+  const q = ((2 / 3) * x) / size;
+  const r = ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size;
+  return roundToHex(q, r);
+}
+
+function roundToHex(q, r) {
+  const x = q;
+  const z = r;
+  const y = -x - z;
+  let rx = Math.round(x);
+  let ry = Math.round(y);
+  let rz = Math.round(z);
+  const xDiff = Math.abs(rx - x);
+  const yDiff = Math.abs(ry - y);
+  const zDiff = Math.abs(rz - z);
+  if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
+  else if (yDiff > zDiff) ry = -rx - rz;
+  else rz = -rx - ry;
+  return { q: rx, r: rz };
+}
+
+function hexToPixel(q, r, size) {
+  return { x: size * 1.5 * q, y: size * Math.sqrt(3) * (r + q / 2) };
+}
+
+function hexCorners(cx, cy, size) {
+  const corners = [];
+  for (let i = 0; i < 6; i++) {
+    const angle = (Math.PI / 3) * i;
+    corners.push({ x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) });
+  }
+  return corners;
+}
+
+// shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
+export function drawHexbin(svg, shots) {
+  const bins = new Map();
+  shots.forEach((shot) => {
+    if (shot.x === undefined || shot.y === undefined) return;
+    const { q, r } = pixelToHex(shot.x, shot.y, HEX_SIZE);
+    const key = `${q},${r}`;
+    const bin = bins.get(key) || { q, r, attempts: 0, makes: 0 };
+    bin.attempts += 1;
+    if (shot.result === 'make') bin.makes += 1;
+    bins.set(key, bin);
+  });
+
+  if (!bins.size) return;
+  const maxAttempts = Math.max(...[...bins.values()].map((b) => b.attempts));
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.setAttribute('id', 'hexbin');
+  bins.forEach((bin) => {
+    const center = hexToPixel(bin.q, bin.r, HEX_SIZE);
+    if (center.x < -HEX_SIZE || center.x > COURT_WIDTH + HEX_SIZE || center.y < -HEX_SIZE || center.y > COURT_HEIGHT + HEX_SIZE) return;
+    const sizeScale = Math.max(0.35, Math.sqrt(bin.attempts / maxAttempts));
+    const corners = hexCorners(center.x, center.y, HEX_SIZE * 0.92 * sizeScale);
+    const polygon = document.createElementNS(SVG_NS, 'polygon');
+    polygon.setAttribute('points', corners.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' '));
+    polygon.setAttribute('fill', heatColorForRate(bin.makes / bin.attempts));
+    polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+    polygon.setAttribute('stroke-width', '0.1');
+    group.appendChild(polygon);
+  });
+  svg.appendChild(group);
+}
+
+// --- Smooth heatmap: kernel-weighted local make%, red (cold/low%) to green (hot/high%) ---
+// This is a locally-smoothed efficiency surface, not a volume density map — it answers
+// "how well does he shoot from around here", matching the article's heatmap convention.
+
+const HEAT_GRID_STEP = 1.5; // feet
+const HEAT_BANDWIDTH = 4.5; // feet, gaussian sigma
+const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
+const HEAT_COLD = [208, 59, 59]; // --critical
+const HEAT_NEUTRAL = [56, 56, 53];
+const HEAT_HOT = [12, 163, 12]; // --good
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function diverging(pct) {
+  const [c1, c2, t] =
+    pct <= HEAT_MIDPOINT
+      ? [HEAT_COLD, HEAT_NEUTRAL, pct / HEAT_MIDPOINT]
+      : [HEAT_NEUTRAL, HEAT_HOT, (pct - HEAT_MIDPOINT) / (1 - HEAT_MIDPOINT)];
+  const r = Math.round(lerp(c1[0], c2[0], t));
+  const g = Math.round(lerp(c1[1], c2[1], t));
+  const b = Math.round(lerp(c1[2], c2[2], t));
+  return `rgb(${r},${g},${b})`;
+}
+
+function gaussianWeight(dx, dy, sigma) {
+  return Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+}
+
+// shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
+export function drawHeatmap(svg, shots) {
+  const points = shots.filter((s) => s.x !== undefined && s.y !== undefined);
+  if (!points.length) return;
+
+  const cells = [];
+  let maxWeight = 0;
+  for (let gx = 0; gx <= COURT_WIDTH; gx += HEAT_GRID_STEP) {
+    for (let gy = 0; gy <= COURT_HEIGHT; gy += HEAT_GRID_STEP) {
+      let totalWeight = 0;
+      let madeWeight = 0;
+      for (const shot of points) {
+        const w = gaussianWeight(gx - shot.x, gy - shot.y, HEAT_BANDWIDTH);
+        totalWeight += w;
+        if (shot.result === 'make') madeWeight += w;
+      }
+      if (totalWeight > 0.05) {
+        cells.push({ gx, gy, pct: madeWeight / totalWeight, weight: totalWeight });
+        if (totalWeight > maxWeight) maxWeight = totalWeight;
+      }
+    }
+  }
+
+  const group = document.createElementNS(SVG_NS, 'g');
+  group.setAttribute('id', 'heatmap');
+  group.setAttribute('filter', 'url(#heat-blur)');
+  cells.forEach((cell) => {
+    const rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('x', (cell.gx - HEAT_GRID_STEP / 2).toFixed(2));
+    rect.setAttribute('y', (cell.gy - HEAT_GRID_STEP / 2).toFixed(2));
+    rect.setAttribute('width', HEAT_GRID_STEP);
+    rect.setAttribute('height', HEAT_GRID_STEP);
+    rect.setAttribute('fill', diverging(cell.pct));
+    rect.setAttribute('opacity', Math.min(1, cell.weight / maxWeight).toFixed(2));
+    group.appendChild(rect);
+  });
+  svg.appendChild(group);
 }
