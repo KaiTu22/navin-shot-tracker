@@ -114,7 +114,7 @@ export function renderTrend(container, games, selectedGameId) {
   container.innerHTML = rows.join('') + bestLine;
 }
 
-export function renderGameList(container, games, selectedGameId) {
+export function renderGameList(container, games, selectedGameId, { canDelete = false } = {}) {
   if (!games.length) {
     container.innerHTML = '<div class="empty-state">No games yet.</div>';
     return;
@@ -123,14 +123,22 @@ export function renderGameList(container, games, selectedGameId) {
     .map((game) => {
       const active = game.id === selectedGameId ? 'active' : '';
       const shotCount = (game.events || []).filter((e) => e.type === 'shot' || e.type === 'freeThrow').length;
+      const statusBadge = game.status === 'live' ? '<span class="game-item__badge">Live</span>' : '';
+      const deleteBtn = canDelete
+        ? `<button type="button" class="game-item__delete" data-delete-id="${game.id}" aria-label="Delete ${game.name}">Delete</button>`
+        : '';
       return `
-        <button type="button" class="game-item ${active}" data-game-id="${game.id}">
-          <span>
+        <div class="game-item ${active}">
+          <button type="button" class="game-item__main" data-select-id="${game.id}">
             <span class="game-item__title">${game.name}</span>
             <span class="game-item__meta">${game.opponent ? `vs ${game.opponent} • ` : ''}${formatDate(game.date)}</span>
+          </button>
+          <span class="game-item__side">
+            ${statusBadge}
+            <span class="game-item__chip">${shotCount}</span>
+            ${deleteBtn}
           </span>
-          <span class="game-item__chip">${shotCount}</span>
-        </button>
+        </div>
       `;
     })
     .join('');

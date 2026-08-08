@@ -3,19 +3,20 @@ import { renderShotChart, renderZoneCards, renderTrend, renderStatGrid, renderGa
 import { installPressFeedback } from './ui-feedback.js';
 
 const el = (id) => document.getElementById(id);
-const screens = ['missing-link', 'games', 'summary'];
+const screens = ['missing-link', 'games', 'summary', 'insights'];
+const NAV_VISIBLE_SCREENS = ['games', 'insights'];
 
 const state = {
   games: [],
   selectedGameId: null,
-  chartMode: 'scatter',
-  insightView: 'all'
+  chartMode: 'scatter'
 };
 
 installPressFeedback();
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`)?.classList.toggle('hidden', s !== name));
+  document.querySelector('.bottom-nav')?.classList.toggle('hidden', !NAV_VISIBLE_SCREENS.includes(name));
 }
 
 function setActiveNav(name) {
@@ -43,15 +44,15 @@ if (!scopeId) {
 }
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId);
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canDelete: false });
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
+  if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
 }
 
 el('game-list').addEventListener('click', (event) => {
-  const item = event.target.closest('[data-game-id]');
-  if (!item) return;
-  state.selectedGameId = item.dataset.gameId;
-  state.insightView = 'all';
+  const selectBtn = event.target.closest('[data-select-id]');
+  if (!selectBtn) return;
+  state.selectedGameId = selectBtn.dataset.selectId;
   showScreen('summary');
   setActiveNav('games');
   renderSummaryScreen();
@@ -63,11 +64,10 @@ document.querySelectorAll('[data-nav]').forEach((btn) => {
     if (target === 'games') {
       showScreen('games');
       setActiveNav('games');
-    } else if (target === 'insights' && state.games.length) {
-      state.selectedGameId = state.selectedGameId || state.games[0].id;
-      showScreen('summary');
+    } else if (target === 'insights') {
+      showScreen('insights');
       setActiveNav('insights');
-      renderSummaryScreen();
+      renderInsightsScreen();
     }
   });
 });
@@ -81,14 +81,6 @@ document.querySelectorAll('.chart-tabs .tab').forEach((btn) => {
   });
 });
 
-document.querySelectorAll('#screen-summary .insight-toggle .filter-button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    state.insightView = btn.dataset.view;
-    document.querySelectorAll('#screen-summary .insight-toggle .filter-button').forEach((b) => b.classList.toggle('active', b === btn));
-    renderSummaryScreen();
-  });
-});
-
 function renderSummaryScreen() {
   const game = getSelectedGame();
   if (!game) return;
@@ -98,15 +90,10 @@ function renderSummaryScreen() {
   el('summary-points').textContent = summary.points;
   renderStatGrid(el('summary-stat-grid'), game.events);
   renderShotChart(el('summary-court'), game.events, state.chartMode);
+  renderZoneCards(el('summary-zone-grid'), game.events);
+}
 
-  const insightEvents = state.insightView === 'all' ? state.games.flatMap((g) => g.events) : game.events;
-  renderZoneCards(el('summary-zone-grid'), insightEvents);
-
-  const trendContainer = el('summary-trend');
-  if (state.insightView === 'all') {
-    trendContainer.classList.remove('hidden');
-    renderTrend(trendContainer, state.games, state.selectedGameId);
-  } else {
-    trendContainer.classList.add('hidden');
-  }
+function renderInsightsScreen() {
+  renderZoneCards(el('insights-zone-grid'), state.games.flatMap((g) => g.events));
+  renderTrend(el('insights-trend'), state.games, state.selectedGameId);
 }

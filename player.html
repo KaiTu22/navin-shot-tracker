@@ -54,13 +54,21 @@
         </div>
 
         <div class="panel">
-          <div class="section-heading"><span>Insights</span></div>
-          <div class="insight-toggle">
-            <button class="filter-button active" data-view="all">All games</button>
-            <button class="filter-button" data-view="selected">This game</button>
-          </div>
+          <div class="section-heading"><span>Shot zones — this game</span></div>
           <div id="summary-zone-grid" class="zone-grid"></div>
-          <div id="summary-trend" class="trend-list"></div>
+        </div>
+      </section>
+
+      <!-- INSIGHTS (all games) -->
+      <section id="screen-insights" class="content hidden">
+        <div class="page-header"><h1>Insights</h1></div>
+        <div class="panel">
+          <div class="section-heading"><span>Shot zones — all games</span></div>
+          <div id="insights-zone-grid" class="zone-grid"></div>
+        </div>
+        <div class="panel">
+          <div class="section-heading"><span>Trend by game</span></div>
+          <div id="insights-trend" class="trend-list"></div>
         </div>
       </section>
 

@@ -89,13 +89,26 @@ button.pressed { transform: scale(0.94); opacity: 0.8; }
 .game-item {
   width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;
   background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 16px;
-  padding: 14px 16px; color: var(--text); text-align: left;
+  padding: 6px 8px 6px 16px; color: var(--text);
+}
+.game-item__main {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start;
+  border: none; background: transparent; color: var(--text); text-align: left; padding: 8px 0;
 }
 .game-item__title { display: block; font-weight: 700; font-size: 1.02rem; }
 .game-item__meta { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 3px; }
+.game-item__side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.game-item__badge {
+  padding: 4px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em;
+  text-transform: uppercase; background: rgba(12,163,12,0.25); color: #7ef3ba; border: 1px solid rgba(12,163,12,0.5);
+}
 .game-item__chip {
-  min-width: 44px; text-align: center; padding: 8px 10px; border-radius: 999px;
+  min-width: 36px; text-align: center; padding: 8px 10px; border-radius: 999px;
   font-size: 0.75rem; font-weight: 700; background: rgba(255,255,255,0.06);
+}
+.game-item__delete {
+  border: 1px solid rgba(208,59,59,0.5); background: rgba(208,59,59,0.14); color: #ff9696;
+  border-radius: 10px; padding: 8px 10px; font-size: 0.72rem; font-weight: 700;
 }
 .empty-state {
   padding: 20px; border-radius: 14px; background: rgba(255,255,255,0.02);
@@ -223,13 +236,6 @@ button.pressed { transform: scale(0.94); opacity: 0.8; }
 .stat-grid .cell .label { font-size: 0.68rem; letter-spacing: 0.1em; color: var(--soft-muted); text-transform: uppercase; margin-top: 3px; }
 
 /* --- Insights --- */
-.insight-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
-.filter-button {
-  flex: 1; min-height: 42px; border: 1px solid var(--line); border-radius: 12px;
-  background: rgba(255,255,255,0.03); color: var(--text); font-weight: 700;
-}
-.filter-button.active { background: rgba(47,140,255,0.18); border-color: rgba(47,140,255,0.7); }
-
 .zone-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .zone-card { background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .zone-card .zone-name { color: var(--soft-muted); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }

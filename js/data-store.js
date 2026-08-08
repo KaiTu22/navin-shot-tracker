@@ -12,6 +12,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   arrayUnion,
   arrayRemove,
@@ -67,6 +68,7 @@ function normalizeGame(id, data) {
     time: data.time || '',
     periodMode: data.periodMode || 'full',
     currentPeriod: data.currentPeriod || 1,
+    status: data.status || 'live',
     events: Array.isArray(data.events) ? data.events : []
   };
 }
@@ -81,6 +83,7 @@ export function createGame(scopeId, meta) {
     time: meta.time || '',
     periodMode: meta.periodMode || 'full',
     currentPeriod: 1,
+    status: 'live',
     events: [],
     createdAt: serverTimestamp()
   });
@@ -88,6 +91,10 @@ export function createGame(scopeId, meta) {
 
 export function updateGameMeta(scopeId, gameId, fields) {
   return updateDoc(gameDoc(scopeId, gameId), fields);
+}
+
+export function deleteGame(scopeId, gameId) {
+  return deleteDoc(gameDoc(scopeId, gameId));
 }
 
 export function endPeriod(scopeId, gameId, nextPeriod) {

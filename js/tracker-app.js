@@ -5,6 +5,8 @@ import {
   signOutTracker,
   subscribeToGames,
   createGame,
+  updateGameMeta,
+  deleteGame,
   appendEvent,
   logShot,
   undoLastEvent,
@@ -19,7 +21,8 @@ import { installPressFeedback } from './ui-feedback.js';
 const SCOPE_KEY = 'shot-tracker-scope-id';
 
 const el = (id) => document.getElementById(id);
-const screens = ['signin', 'games', 'new-game', 'live', 'summary'];
+const screens = ['signin', 'games', 'new-game', 'live', 'summary', 'insights'];
+const NAV_VISIBLE_SCREENS = ['games', 'insights'];
 
 const state = {
   scopeId: null,
@@ -28,7 +31,6 @@ const state = {
   pendingShot: null,
   periodMode: 'full',
   chartMode: 'scatter',
-  insightView: 'all',
   unsubscribeGames: null
 };
 
@@ -36,7 +38,7 @@ installPressFeedback();
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`).classList.toggle('hidden', s !== name));
-  document.querySelector('.bottom-nav').classList.toggle('hidden', name === 'signin');
+  document.querySelector('.bottom-nav').classList.toggle('hidden', !NAV_VISIBLE_SCREENS.includes(name));
 }
 
 function setActiveNav(name) {
@@ -97,19 +99,39 @@ el('sign-out-btn').addEventListener('click', () => signOutTracker());
 // --- Games updates drive whichever screen is visible ---
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId);
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canDelete: true });
   if (!el('screen-live').classList.contains('hidden')) renderLiveScreen();
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
+  if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
+}
+
+function openGame(game) {
+  state.selectedGameId = game.id;
+  state.pendingShot = null;
+  setActiveNav('games');
+  if (game.status === 'live') {
+    showScreen('live');
+    renderLiveScreen();
+  } else {
+    showScreen('summary');
+    renderSummaryScreen();
+  }
 }
 
 el('game-list').addEventListener('click', (event) => {
-  const item = event.target.closest('[data-game-id]');
-  if (!item) return;
-  state.selectedGameId = item.dataset.gameId;
-  state.insightView = 'all';
-  showScreen('summary');
-  setActiveNav('games');
-  renderSummaryScreen();
+  const deleteBtn = event.target.closest('[data-delete-id]');
+  if (deleteBtn) {
+    const game = state.games.find((g) => g.id === deleteBtn.dataset.deleteId);
+    if (game && confirm(`Delete "${game.name}"? This can't be undone.`)) {
+      deleteGame(state.scopeId, game.id);
+      if (state.selectedGameId === game.id) state.selectedGameId = null;
+    }
+    return;
+  }
+  const selectBtn = event.target.closest('[data-select-id]');
+  if (!selectBtn) return;
+  const game = state.games.find((g) => g.id === selectBtn.dataset.selectId);
+  if (game) openGame(game);
 });
 
 document.querySelectorAll('[data-nav]').forEach((btn) => {
@@ -119,17 +141,16 @@ document.querySelectorAll('[data-nav]').forEach((btn) => {
       showScreen('games');
       setActiveNav('games');
     } else if (target === 'live') {
+      const game = getSelectedGame();
+      if (game) updateGameMeta(state.scopeId, game.id, { status: 'live' });
       state.pendingShot = null;
       showScreen('live');
       setActiveNav('games');
       renderLiveScreen();
     } else if (target === 'insights') {
-      if (state.games.length) {
-        state.selectedGameId = state.selectedGameId || state.games[0].id;
-        showScreen('summary');
-        setActiveNav('insights');
-        renderSummaryScreen();
-      }
+      showScreen('insights');
+      setActiveNav('insights');
+      renderInsightsScreen();
     }
   });
 });
@@ -280,22 +301,26 @@ el('undo-btn').addEventListener('click', () => {
   if (game) undoLastEvent(state.scopeId, game.id, game.events);
 });
 
+function finishGame(game) {
+  updateGameMeta(state.scopeId, game.id, { status: 'final' });
+  showScreen('summary');
+  setActiveNav('games');
+  renderSummaryScreen();
+}
+
 el('end-period-btn').addEventListener('click', () => {
   const game = getSelectedGame();
   if (!game) return;
   if (game.periodMode === 'full') {
-    showScreen('summary');
-    setActiveNav('games');
-    renderSummaryScreen();
+    finishGame(game);
     return;
   }
   endPeriod(state.scopeId, game.id, game.currentPeriod + 1);
 });
 
 el('done-btn').addEventListener('click', () => {
-  showScreen('summary');
-  setActiveNav('games');
-  renderSummaryScreen();
+  const game = getSelectedGame();
+  if (game) finishGame(game);
 });
 
 // --- Summary ---
@@ -309,14 +334,6 @@ document.querySelectorAll('.chart-tabs .tab').forEach((btn) => {
   });
 });
 
-document.querySelectorAll('#screen-summary .insight-toggle .filter-button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    state.insightView = btn.dataset.view;
-    document.querySelectorAll('#screen-summary .insight-toggle .filter-button').forEach((b) => b.classList.toggle('active', b === btn));
-    renderSummaryScreen();
-  });
-});
-
 function renderSummaryScreen() {
   const game = getSelectedGame();
   if (!game) return;
@@ -326,15 +343,10 @@ function renderSummaryScreen() {
   el('summary-points').textContent = summary.points;
   renderStatGrid(el('summary-stat-grid'), game.events);
   renderShotChart(el('summary-court'), game.events, state.chartMode);
+  renderZoneCards(el('summary-zone-grid'), game.events);
+}
 
-  const insightEvents = state.insightView === 'all' ? state.games.flatMap((g) => g.events) : game.events;
-  renderZoneCards(el('summary-zone-grid'), insightEvents);
-
-  const trendContainer = el('summary-trend');
-  if (state.insightView === 'all') {
-    trendContainer.classList.remove('hidden');
-    renderTrend(trendContainer, state.games, state.selectedGameId);
-  } else {
-    trendContainer.classList.add('hidden');
-  }
+function renderInsightsScreen() {
+  renderZoneCards(el('insights-zone-grid'), state.games.flatMap((g) => g.events));
+  renderTrend(el('insights-trend'), state.games, state.selectedGameId);
 }
