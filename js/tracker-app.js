@@ -33,9 +33,11 @@ const state = {
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`).classList.toggle('hidden', s !== name));
-  document.querySelectorAll('.nav-item').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.nav === 'games' && (name === 'games' || name === 'new-game' || name === 'live' || name === 'summary'));
-  });
+  document.querySelector('.bottom-nav').classList.toggle('hidden', name === 'signin');
+}
+
+function setActiveNav(name) {
+  document.querySelectorAll('.nav-item').forEach((btn) => btn.classList.toggle('active', btn.dataset.nav === name));
 }
 
 function getScopeId() {
@@ -74,6 +76,7 @@ onAuthChange((user) => {
     (error) => console.error('Failed to load games', error)
   );
   showScreen('games');
+  setActiveNav('games');
 });
 
 el('signin-form').addEventListener('submit', async (event) => {
@@ -102,18 +105,25 @@ el('game-list').addEventListener('click', (event) => {
   state.selectedGameId = item.dataset.gameId;
   state.insightView = 'all';
   showScreen('summary');
+  setActiveNav('games');
   renderSummaryScreen();
 });
 
 document.querySelectorAll('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const target = btn.dataset.nav;
-    if (target === 'games') showScreen('games');
-    else if (target === 'live') showScreen('live');
-    else if (target === 'insights') {
+    if (target === 'games') {
+      showScreen('games');
+      setActiveNav('games');
+    } else if (target === 'live') {
+      showScreen('live');
+      setActiveNav('games');
+      renderLiveScreen();
+    } else if (target === 'insights') {
       if (state.games.length) {
         state.selectedGameId = state.selectedGameId || state.games[0].id;
         showScreen('summary');
+        setActiveNav('insights');
         renderSummaryScreen();
       }
     }
@@ -160,6 +170,7 @@ el('start-tracking-btn').addEventListener('click', async () => {
   state.selectedGameId = docRef.id;
   state.shotResult = 'make';
   showScreen('live');
+  setActiveNav('games');
 });
 
 // --- Live tracking ---
@@ -247,6 +258,7 @@ el('end-period-btn').addEventListener('click', () => {
   if (!game) return;
   if (game.periodMode === 'full') {
     showScreen('summary');
+    setActiveNav('games');
     renderSummaryScreen();
     return;
   }
@@ -255,6 +267,7 @@ el('end-period-btn').addEventListener('click', () => {
 
 el('done-btn').addEventListener('click', () => {
   showScreen('summary');
+  setActiveNav('games');
   renderSummaryScreen();
 });
 

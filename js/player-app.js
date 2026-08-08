@@ -15,6 +15,10 @@ function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`)?.classList.toggle('hidden', s !== name));
 }
 
+function setActiveNav(name) {
+  document.querySelectorAll('.nav-item').forEach((btn) => btn.classList.toggle('active', btn.dataset.nav === name));
+}
+
 function getSelectedGame() {
   return state.games.find((g) => g.id === state.selectedGameId) || null;
 }
@@ -46,16 +50,20 @@ el('game-list').addEventListener('click', (event) => {
   state.selectedGameId = item.dataset.gameId;
   state.insightView = 'all';
   showScreen('summary');
+  setActiveNav('games');
   renderSummaryScreen();
 });
 
 document.querySelectorAll('[data-nav]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const target = btn.dataset.nav;
-    if (target === 'games') showScreen('games');
-    else if (target === 'insights' && state.games.length) {
+    if (target === 'games') {
+      showScreen('games');
+      setActiveNav('games');
+    } else if (target === 'insights' && state.games.length) {
       state.selectedGameId = state.selectedGameId || state.games[0].id;
       showScreen('summary');
+      setActiveNav('insights');
       renderSummaryScreen();
     }
   });
