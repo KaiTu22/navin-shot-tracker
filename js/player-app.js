@@ -1,5 +1,14 @@
 import { PLAYER_NAME, subscribeToGames, getShotSummary } from './data-store.js';
-import { renderShotChart, renderZoneCards, renderTrend, renderStatGrid, renderGameList, formatDate } from './render.js';
+import {
+  renderShotChart,
+  renderZoneCards,
+  renderTrend,
+  renderStatGrid,
+  renderGameList,
+  renderGameFilterChips,
+  filterGames,
+  formatDate
+} from './render.js';
 import { installPressFeedback } from './ui-feedback.js';
 
 const el = (id) => document.getElementById(id);
@@ -9,7 +18,9 @@ const NAV_VISIBLE_SCREENS = ['games', 'insights'];
 const state = {
   games: [],
   selectedGameId: null,
-  chartMode: 'scatter'
+  chartMode: 'scatter',
+  insightsChartMode: 'scatter',
+  insightGameIds: new Set()
 };
 
 installPressFeedback();
@@ -72,10 +83,10 @@ document.querySelectorAll('[data-nav]').forEach((btn) => {
   });
 });
 
-document.querySelectorAll('.chart-tabs .tab').forEach((btn) => {
+document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((btn) => {
   btn.addEventListener('click', () => {
     state.chartMode = btn.dataset.chartMode;
-    document.querySelectorAll('.chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
     renderSummaryScreen();
   });
@@ -93,7 +104,36 @@ function renderSummaryScreen() {
   renderZoneCards(el('summary-zone-grid'), game.events);
 }
 
+// --- Insights ---
+
+document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.insightsChartMode = btn.dataset.chartMode;
+    document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
+    el('insights-legend').classList.toggle('hidden', state.insightsChartMode !== 'scatter');
+    renderInsightsScreen();
+  });
+});
+
+el('insights-game-filter').addEventListener('click', (event) => {
+  const chip = event.target.closest('[data-filter-game]');
+  if (!chip) return;
+  const gameId = chip.dataset.filterGame;
+  if (gameId === 'all') {
+    state.insightGameIds.clear();
+  } else if (state.insightGameIds.has(gameId)) {
+    state.insightGameIds.delete(gameId);
+  } else {
+    state.insightGameIds.add(gameId);
+  }
+  renderInsightsScreen();
+});
+
 function renderInsightsScreen() {
-  renderZoneCards(el('insights-zone-grid'), state.games.flatMap((g) => g.events));
-  renderTrend(el('insights-trend'), state.games, state.selectedGameId);
+  const filteredGames = filterGames(state.games, state.insightGameIds);
+  const combinedEvents = filteredGames.flatMap((g) => g.events);
+  renderGameFilterChips(el('insights-game-filter'), state.games, state.insightGameIds);
+  renderShotChart(el('insights-court'), combinedEvents, state.insightsChartMode);
+  renderZoneCards(el('insights-zone-grid'), combinedEvents);
+  renderTrend(el('insights-trend'), filteredGames, state.selectedGameId);
 }

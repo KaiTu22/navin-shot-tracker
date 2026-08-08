@@ -240,6 +240,13 @@ button.pressed { transform: scale(0.94); opacity: 0.8; }
 .stat-grid .cell .label { font-size: 0.68rem; letter-spacing: 0.1em; color: var(--soft-muted); text-transform: uppercase; margin-top: 3px; }
 
 /* --- Insights --- */
+.filter-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.filter-chip {
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px;
+  background: rgba(255,255,255,0.03); color: var(--muted); font-size: 0.82rem; font-weight: 700;
+}
+.filter-chip.active { background: rgba(47,140,255,0.2); border-color: rgba(47,140,255,0.7); color: var(--text); }
+
 .zone-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .zone-card { background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .zone-card .zone-name { color: var(--soft-muted); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }

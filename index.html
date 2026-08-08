@@ -180,11 +180,32 @@
         </div>
       </section>
 
-      <!-- INSIGHTS (all games) -->
+      <!-- INSIGHTS -->
       <section id="screen-insights" class="content hidden">
         <div class="page-header"><h1>Insights</h1></div>
+
         <div class="panel">
-          <div class="section-heading"><span>Shot zones — all games</span></div>
+          <div class="section-heading"><span>Games</span></div>
+          <div id="insights-game-filter" class="filter-chip-row"></div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Shot chart</span></div>
+          <div class="chart-tabs" id="insights-chart-tabs">
+            <button class="tab active" data-chart-mode="scatter">Scatter</button>
+            <button class="tab" data-chart-mode="zones">Zones</button>
+            <button class="tab" data-chart-mode="hex">Hex</button>
+            <button class="tab" data-chart-mode="heat">Heat</button>
+          </div>
+          <div class="court-wrap"><svg id="insights-court" role="img" aria-label="Basketball court"></svg></div>
+          <div class="shot-legend" id="insights-legend">
+            <span><span class="legend-dot make"></span>Make</span>
+            <span><span class="legend-dot miss"></span>Miss</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-heading"><span>Shot zones</span></div>
           <div id="insights-zone-grid" class="zone-grid"></div>
         </div>
         <div class="panel">

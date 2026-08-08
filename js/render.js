@@ -151,3 +151,24 @@ export function renderGameList(container, games, selectedGameId, { canManage = f
     })
     .join('');
 }
+
+// selectedIds: null/empty Set means "All Games". Otherwise a Set of chosen game ids
+// (single or multiple selection both render the same way — chips just toggle membership).
+export function renderGameFilterChips(container, games, selectedIds) {
+  if (!games.length) {
+    container.innerHTML = '<div class="empty-state">No games yet.</div>';
+    return;
+  }
+  const allActive = !selectedIds || selectedIds.size === 0;
+  const chips = [`<button type="button" class="filter-chip ${allActive ? 'active' : ''}" data-filter-game="all">All Games</button>`];
+  games.forEach((game) => {
+    const active = !allActive && selectedIds.has(game.id);
+    chips.push(`<button type="button" class="filter-chip ${active ? 'active' : ''}" data-filter-game="${game.id}">${game.name}</button>`);
+  });
+  container.innerHTML = chips.join('');
+}
+
+export function filterGames(games, selectedIds) {
+  if (!selectedIds || selectedIds.size === 0) return games;
+  return games.filter((g) => selectedIds.has(g.id));
+}
