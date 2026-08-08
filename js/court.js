@@ -1,22 +1,33 @@
-// To-scale half-court geometry (units = feet) and zone/shot-type classification.
-// Single source of truth for hoop position so shot classification always matches the drawn art.
+// To-scale high-school half-court geometry (NFHS dimensions, units = feet) and
+// zone/shot-type classification. Single source of truth for hoop position so
+// shot classification always matches the drawn art.
+//
+// NFHS (high school) differs from NBA/NCAA: 12ft lane (not 16ft), 19'9" 3PT arc
+// (not 22-23'9"), and — importantly — the 3PT line is a single constant-radius
+// arc with no straight "corner" segments, since 19.75ft is already less than the
+// distance from the hoop to the sideline. That makes shot-type classification a
+// plain distance check, with no NBA-style corner special-casing needed.
 
 export const HOOP = { x: 25, y: 5.25 };
-export const RESTRICTED_RADIUS = 4;
-export const LANE_HALF_WIDTH = 8;
+export const RESTRICTED_RADIUS = 3; // not an official NFHS line; used only to bucket rim-level shots for insights
+export const LANE_HALF_WIDTH = 6; // NFHS lane is 12ft wide
 export const FREE_THROW_LINE_Y = 19;
 export const FREE_THROW_CIRCLE_RADIUS = 6;
-export const THREE_POINT_RADIUS = 23.75;
-export const CORNER_X_OFFSET = 22; // distance from hoop's x to each corner 3 line
-export const CORNER_TRANSITION_Y = HOOP.y + Math.sqrt(THREE_POINT_RADIUS ** 2 - CORNER_X_OFFSET ** 2);
+export const THREE_POINT_RADIUS = 19.75; // 19'9"
 export const COURT_WIDTH = 50;
-export const COURT_HEIGHT = 32;
+export const COURT_HEIGHT = 27;
 export const VIEW_BOX = `-3 -2 ${COURT_WIDTH + 6} ${COURT_HEIGHT + 2}`;
 
 const LANE_LEFT = HOOP.x - LANE_HALF_WIDTH;
 const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
-const CORNER_LEFT_X = HOOP.x - CORNER_X_OFFSET;
-const CORNER_RIGHT_X = HOOP.x + CORNER_X_OFFSET;
+
+// Corner-3 vs above-the-break-3 isn't an official NFHS distinction (there's no
+// straight corner line at this level) - it's our own 45-degree split for
+// grouping shots into readable insight buckets.
+const CORNER_SPLIT_OFFSET = THREE_POINT_RADIUS / Math.SQRT2;
+const CORNER_LEFT_X = HOOP.x - CORNER_SPLIT_OFFSET;
+const CORNER_RIGHT_X = HOOP.x + CORNER_SPLIT_OFFSET;
+const CORNER_SPLIT_Y = HOOP.y + CORNER_SPLIT_OFFSET;
 
 export const ZONES = [
   'Restricted Area',
@@ -36,8 +47,6 @@ function distanceFromHoop(x, y) {
 }
 
 export function classifyShot(x, y) {
-  const inCornerStrip = x <= CORNER_LEFT_X || x >= CORNER_RIGHT_X;
-  if (inCornerStrip && y <= CORNER_TRANSITION_Y) return '3PT';
   return distanceFromHoop(x, y) >= THREE_POINT_RADIUS ? '3PT' : '2PT';
 }
 
@@ -72,15 +81,32 @@ export function pointFromEvent(svg, evt) {
   };
 }
 
+// Samples points around a circle centered at (cx,cy). Angle 0 points straight
+// into the court (away from the baseline); positive angles sweep toward +x.
+// Building the arc this way (rather than an SVG arc-to command) sidesteps
+// large-arc/sweep-flag guesswork entirely.
+function arcPathPoints(cx, cy, radius, fromAngle, toAngle, steps) {
+  const points = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = fromAngle + ((toAngle - fromAngle) * i) / steps;
+    points.push({ x: cx + radius * Math.sin(angle), y: cy + radius * Math.cos(angle) });
+  }
+  return points;
+}
+
+function pathFromPoints(points) {
+  return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
+}
+
 function threePointPath() {
-  const leftCornerTop = { x: CORNER_LEFT_X, y: CORNER_TRANSITION_Y };
-  const rightCornerTop = { x: CORNER_RIGHT_X, y: CORNER_TRANSITION_Y };
-  return [
-    `M ${CORNER_LEFT_X} 0`,
-    `L ${leftCornerTop.x} ${leftCornerTop.y}`,
-    `A ${THREE_POINT_RADIUS} ${THREE_POINT_RADIUS} 0 0 1 ${rightCornerTop.x} ${rightCornerTop.y}`,
-    `L ${CORNER_RIGHT_X} 0`
-  ].join(' ');
+  const halfSpan = Math.acos(-HOOP.y / THREE_POINT_RADIUS);
+  const points = arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, -halfSpan, halfSpan, 48);
+  return pathFromPoints(points);
+}
+
+function restrictedAreaPath() {
+  const points = arcPathPoints(HOOP.x, HOOP.y, RESTRICTED_RADIUS, -Math.PI / 2, Math.PI / 2, 24);
+  return pathFromPoints(points);
 }
 
 export function drawCourt(svg) {
@@ -98,7 +124,7 @@ export function drawCourt(svg) {
 
     <path d="M ${HOOP.x - 3} 4 L ${HOOP.x + 3} 4" stroke="#f5f5f5" stroke-width="0.4" />
     <circle cx="${HOOP.x}" cy="${HOOP.y}" r="0.75" fill="none" stroke="#ff7a1a" stroke-width="0.3" />
-    <path d="M ${HOOP.x - RESTRICTED_RADIUS} ${HOOP.y} A ${RESTRICTED_RADIUS} ${RESTRICTED_RADIUS} 0 0 0 ${HOOP.x + RESTRICTED_RADIUS} ${HOOP.y}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
+    <path d="${restrictedAreaPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
 
     <path d="${threePointPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
   `;
@@ -126,15 +152,15 @@ function zonePath(zone) {
     case 'Mid-Range (Center)':
       return `M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${COURT_HEIGHT} L ${LANE_LEFT} ${COURT_HEIGHT} Z`;
     case 'Corner 3 (Left)':
-      return `M 0 0 L ${CORNER_LEFT_X} 0 L ${CORNER_LEFT_X} ${CORNER_TRANSITION_Y} L 0 ${CORNER_TRANSITION_Y} Z`;
+      return `M 0 0 L ${CORNER_LEFT_X} 0 L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L 0 ${CORNER_SPLIT_Y} Z`;
     case 'Corner 3 (Right)':
-      return `M ${CORNER_RIGHT_X} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_TRANSITION_Y} L ${CORNER_RIGHT_X} ${CORNER_TRANSITION_Y} Z`;
+      return `M ${CORNER_RIGHT_X} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} Z`;
     case 'Above Break 3 (Left)':
-      return `M 0 ${CORNER_TRANSITION_Y} L ${CORNER_LEFT_X} ${CORNER_TRANSITION_Y} L ${HOOP.x - 5} ${COURT_HEIGHT} L 0 ${COURT_HEIGHT} Z`;
+      return `M 0 ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L ${HOOP.x - 5} ${COURT_HEIGHT} L 0 ${COURT_HEIGHT} Z`;
     case 'Above Break 3 (Right)':
-      return `M ${CORNER_RIGHT_X} ${CORNER_TRANSITION_Y} L ${COURT_WIDTH} ${CORNER_TRANSITION_Y} L ${COURT_WIDTH} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} Z`;
+      return `M ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} Z`;
     case 'Above Break 3 (Center)':
-      return `M ${HOOP.x - 5} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} L ${CORNER_RIGHT_X} ${CORNER_TRANSITION_Y} L ${CORNER_LEFT_X} ${CORNER_TRANSITION_Y} Z`;
+      return `M ${HOOP.x - 5} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} Z`;
     default:
       return '';
   }
@@ -181,4 +207,24 @@ export function drawShots(svg, shots) {
     group.appendChild(mark);
   });
   svg.appendChild(group);
+}
+
+// The not-yet-confirmed tap location in the two-step (tap, then Make/Miss) shot flow.
+export function drawPendingMarker(svg, x, y) {
+  removePendingMarker(svg);
+  const mark = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  mark.setAttribute('id', 'pending-shot-marker');
+  mark.setAttribute('cx', x);
+  mark.setAttribute('cy', y);
+  mark.setAttribute('r', '1.3');
+  mark.setAttribute('fill', 'rgba(47,140,255,0.35)');
+  mark.setAttribute('stroke', '#2f8cff');
+  mark.setAttribute('stroke-width', '0.25');
+  mark.setAttribute('class', 'pending-shot-pulse');
+  svg.appendChild(mark);
+}
+
+export function removePendingMarker(svg) {
+  const existing = svg.querySelector('#pending-shot-marker');
+  if (existing) existing.remove();
 }

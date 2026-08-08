@@ -1,5 +1,6 @@
 import { PLAYER_NAME, subscribeToGames, getShotSummary } from './data-store.js';
 import { renderShotChart, renderZoneCards, renderTrend, renderStatGrid, renderGameList, formatDate } from './render.js';
+import { installPressFeedback } from './ui-feedback.js';
 
 const el = (id) => document.getElementById(id);
 const screens = ['missing-link', 'games', 'summary'];
@@ -10,6 +11,8 @@ const state = {
   chartMode: 'scatter',
   insightView: 'all'
 };
+
+installPressFeedback();
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`)?.classList.toggle('hidden', s !== name));

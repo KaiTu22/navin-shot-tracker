@@ -105,16 +105,21 @@
           <div class="stat-strip" id="live-stat-strip"></div>
 
           <div class="court-wrap"><svg id="live-court" role="img" aria-label="Basketball court"></svg></div>
-          <div class="shot-legend">
+          <div class="shot-legend" id="live-legend">
             <span><span class="legend-dot make"></span>Make</span>
             <span><span class="legend-dot miss"></span>Miss</span>
           </div>
+          <div class="shot-confirm hidden" id="shot-confirm-panel">
+            <div class="shot-confirm-label">Confirm <strong id="shot-confirm-type">2PT</strong> shot</div>
+            <div class="shot-confirm-actions">
+              <button type="button" class="quick-action success" id="confirm-make-btn">Make</button>
+              <button type="button" class="quick-action danger" id="confirm-miss-btn">Miss</button>
+              <button type="button" class="text-button" id="confirm-cancel-btn">Cancel</button>
+            </div>
+          </div>
+          <div class="field-hint" id="live-tap-hint">Tap the court where the shot was taken</div>
 
           <div class="shot-controls">
-            <div class="segmented" id="shot-result-group">
-              <button type="button" class="segment active make" data-result="make">Make</button>
-              <button type="button" class="segment miss" data-result="miss">Miss</button>
-            </div>
             <div class="quick-events">
               <button type="button" class="quick-action success" id="ft-make-btn">Free throw make</button>
               <button type="button" class="quick-action danger" id="ft-miss-btn">Free throw miss</button>

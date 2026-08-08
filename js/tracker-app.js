@@ -12,8 +12,9 @@ import {
   getShotSummary,
   getCountStats
 } from './data-store.js';
-import { classifyShot, pointFromEvent } from './court.js';
+import { classifyShot, pointFromEvent, drawPendingMarker, removePendingMarker } from './court.js';
 import { renderShotChart, renderZoneCards, renderTrend, renderStatGrid, renderGameList, formatDate } from './render.js';
+import { installPressFeedback } from './ui-feedback.js';
 
 const SCOPE_KEY = 'shot-tracker-scope-id';
 
@@ -24,12 +25,14 @@ const state = {
   scopeId: null,
   games: [],
   selectedGameId: null,
-  shotResult: 'make',
+  pendingShot: null,
   periodMode: 'full',
   chartMode: 'scatter',
   insightView: 'all',
   unsubscribeGames: null
 };
+
+installPressFeedback();
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`).classList.toggle('hidden', s !== name));
@@ -116,6 +119,7 @@ document.querySelectorAll('[data-nav]').forEach((btn) => {
       showScreen('games');
       setActiveNav('games');
     } else if (target === 'live') {
+      state.pendingShot = null;
       showScreen('live');
       setActiveNav('games');
       renderLiveScreen();
@@ -168,7 +172,7 @@ el('start-tracking-btn').addEventListener('click', async () => {
   };
   const docRef = await createGame(state.scopeId, meta);
   state.selectedGameId = docRef.id;
-  state.shotResult = 'make';
+  state.pendingShot = null;
   showScreen('live');
   setActiveNav('games');
 });
@@ -207,22 +211,45 @@ function renderLiveScreen() {
   el('end-period-btn').textContent = game.periodMode === 'full' ? 'Done' : `End ${periodLabel(game)}`;
   renderLiveStatStrip(el('live-stat-strip'), game.events);
   renderShotChart(el('live-court'), game.events, 'scatter');
-}
 
-document.querySelectorAll('#shot-result-group .segment').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    state.shotResult = btn.dataset.result;
-    document.querySelectorAll('#shot-result-group .segment').forEach((b) => b.classList.toggle('active', b === btn));
-  });
-});
+  if (state.pendingShot) {
+    drawPendingMarker(el('live-court'), state.pendingShot.x, state.pendingShot.y);
+    el('shot-confirm-type').textContent = state.pendingShot.shotType;
+    el('shot-confirm-panel').classList.remove('hidden');
+    el('live-tap-hint').classList.add('hidden');
+    el('live-legend').classList.add('hidden');
+  } else {
+    el('shot-confirm-panel').classList.add('hidden');
+    el('live-tap-hint').classList.remove('hidden');
+    el('live-legend').classList.remove('hidden');
+  }
+}
 
 el('live-court').addEventListener('click', (event) => {
   const game = getSelectedGame();
   if (!game) return;
   const svg = el('live-court');
   const { x, y } = pointFromEvent(svg, event);
-  const shotType = classifyShot(x, y);
-  logShot(state.scopeId, game.id, { x, y, shotType, result: state.shotResult }, game.currentPeriod);
+  state.pendingShot = { x, y, shotType: classifyShot(x, y) };
+  renderLiveScreen();
+});
+
+function confirmPendingShot(result) {
+  const game = getSelectedGame();
+  if (!game || !state.pendingShot) return;
+  const { x, y, shotType } = state.pendingShot;
+  logShot(state.scopeId, game.id, { x, y, shotType, result }, game.currentPeriod);
+  state.pendingShot = null;
+  removePendingMarker(el('live-court'));
+  renderLiveScreen();
+}
+
+el('confirm-make-btn').addEventListener('click', () => confirmPendingShot('make'));
+el('confirm-miss-btn').addEventListener('click', () => confirmPendingShot('miss'));
+el('confirm-cancel-btn').addEventListener('click', () => {
+  state.pendingShot = null;
+  removePendingMarker(el('live-court'));
+  renderLiveScreen();
 });
 
 el('ft-make-btn').addEventListener('click', () => {
