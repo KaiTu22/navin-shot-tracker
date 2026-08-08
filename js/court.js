@@ -2,11 +2,12 @@
 // zone/shot-type classification. Single source of truth for hoop position so
 // shot classification always matches the drawn art.
 //
-// NFHS (high school) differs from NBA/NCAA: 12ft lane (not 16ft), 19'9" 3PT arc
-// (not 22-23'9"), and — importantly — the 3PT line is a single constant-radius
-// arc with no straight "corner" segments, since 19.75ft is already less than the
-// distance from the hoop to the sideline. That makes shot-type classification a
-// plain distance check, with no NBA-style corner special-casing needed.
+// NFHS (high school) differs from NBA/NCAA: 12ft lane (not 16ft) and a 19'9"
+// 3PT radius (not 22-23'9"). The 3PT line is a "stadium" shape, not a pure
+// circle: it follows the 19'9" arc down to the height of the rim center, then
+// continues straight (tangent to the arc, no kink) to the baseline from there
+// — so below rim height the boundary is a constant-x vertical line, and above
+// it, it's the true arc.
 
 export const HOOP = { x: 25, y: 5.25 };
 export const RESTRICTED_RADIUS = 3; // not an official NFHS line; used only to bucket rim-level shots for insights
@@ -21,13 +22,11 @@ export const VIEW_BOX = `-3 -2 ${COURT_WIDTH + 6} ${COURT_HEIGHT + 2}`;
 const LANE_LEFT = HOOP.x - LANE_HALF_WIDTH;
 const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
 
-// Corner-3 vs above-the-break-3 isn't an official NFHS distinction (there's no
-// straight corner line at this level) - it's our own 45-degree split for
-// grouping shots into readable insight buckets.
-const CORNER_SPLIT_OFFSET = THREE_POINT_RADIUS / Math.SQRT2;
-const CORNER_LEFT_X = HOOP.x - CORNER_SPLIT_OFFSET;
-const CORNER_RIGHT_X = HOOP.x + CORNER_SPLIT_OFFSET;
-const CORNER_SPLIT_Y = HOOP.y + CORNER_SPLIT_OFFSET;
+// The straight-vs-arc transition happens exactly level with the rim, where the
+// arc's tangent is already vertical - so the corner line and the arc meet smoothly.
+const CORNER_LEFT_X = HOOP.x - THREE_POINT_RADIUS;
+const CORNER_RIGHT_X = HOOP.x + THREE_POINT_RADIUS;
+const CORNER_SPLIT_Y = HOOP.y;
 
 export const ZONES = [
   'Restricted Area',
@@ -47,6 +46,9 @@ function distanceFromHoop(x, y) {
 }
 
 export function classifyShot(x, y) {
+  if (y <= HOOP.y) {
+    return Math.abs(x - HOOP.x) >= THREE_POINT_RADIUS ? '3PT' : '2PT';
+  }
   return distanceFromHoop(x, y) >= THREE_POINT_RADIUS ? '3PT' : '2PT';
 }
 
@@ -99,8 +101,10 @@ function pathFromPoints(points) {
 }
 
 function threePointPath() {
-  const halfSpan = Math.acos(-HOOP.y / THREE_POINT_RADIUS);
-  const points = arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, -halfSpan, halfSpan, 48);
+  // Straight segment down to the baseline, then the true arc (tangent at the
+  // seam, level with the rim), then straight back down on the other side.
+  const arcPoints = arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2, 48);
+  const points = [{ x: CORNER_LEFT_X, y: 0 }, ...arcPoints, { x: CORNER_RIGHT_X, y: 0 }];
   return pathFromPoints(points);
 }
 
