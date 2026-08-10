@@ -48,6 +48,11 @@ export const ZONES = [
   'Above Break 3 (Right)'
 ];
 
+const THREE_PT_ZONES = new Set(['Corner 3 (Left)', 'Corner 3 (Right)', 'Above Break 3 (Left)', 'Above Break 3 (Center)', 'Above Break 3 (Right)']);
+export function zoneShotType(zone) {
+  return THREE_PT_ZONES.has(zone) ? '3PT' : '2PT';
+}
+
 function distanceFromHoop(x, y) {
   return Math.hypot(x - HOOP.x, y - HOOP.y);
 }
@@ -165,6 +170,28 @@ export function heatColorForRate(pct) {
   return HEAT_STEPS[idx];
 }
 
+// A spot's raw FG% doesn't account for shot difficulty (35% from three is great,
+// 35% at the rim isn't) - relativeColor instead compares a zone/hex's make% to the
+// player's OWN baseline for that shot type (his overall 2PT% or 3PT%, from the same
+// dataset being viewed), the same "vs. average" technique real shot-chart tools use.
+// Red = shooting above his own average from there ("hot"), blue = below ("cold") -
+// two shades per side by lightness (not a red<->green hue crossing) for CVD safety.
+export const MIN_ATTEMPTS_FOR_COLOR = 2; // fewer attempts than this = not enough data to color meaningfully
+const NO_DATA_COLOR = 'rgba(255,255,255,0.04)';
+const NEUTRAL_COLOR = '#383835';
+const RED_MILD = '#e66767';
+const RED_STRONG = '#d03b3b';
+const BLUE_MILD = '#5598e7';
+const BLUE_STRONG = '#184f95';
+
+export function relativeColorForDelta(delta) {
+  if (delta === null || delta === undefined) return NO_DATA_COLOR;
+  const magnitude = Math.abs(delta);
+  if (magnitude < 0.08) return NEUTRAL_COLOR;
+  if (delta > 0) return magnitude >= 0.18 ? RED_STRONG : RED_MILD;
+  return magnitude >= 0.18 ? BLUE_STRONG : BLUE_MILD;
+}
+
 function zonePath(zone) {
   switch (zone) {
     case 'Restricted Area':
@@ -195,20 +222,30 @@ function zonePath(zone) {
 // zoneStats: Map<zoneLabel, {attempts, makes}>
 // metric 'fgpct' colors by make% per zone (default); 'attempts' colors by relative
 // shot volume instead, so you can see where he shoots from most vs. where he's best.
-export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct') {
+// baselines: { twoPct, threePct } - his own overall make% by shot type, from the
+// same dataset being charted. Only used in 'fgpct' metric mode.
+export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = {}) {
   const maxAttempts = Math.max(0, ...[...zoneStats.values()].map((s) => s.attempts));
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'zone-overlay');
   ZONES.forEach((zone) => {
     const stat = zoneStats.get(zone);
-    const value =
-      metric === 'attempts'
-        ? stat && maxAttempts ? stat.attempts / maxAttempts : null
-        : stat && stat.attempts ? stat.makes / stat.attempts : null;
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', zonePath(zone));
-    path.setAttribute('fill', heatColorForRate(value));
-    path.setAttribute('fill-opacity', value === null ? '1' : '0.82');
+
+    if (metric === 'attempts') {
+      const value = stat && maxAttempts ? stat.attempts / maxAttempts : null;
+      path.setAttribute('fill', heatColorForRate(value));
+      path.setAttribute('fill-opacity', value === null ? '1' : '0.82');
+    } else if (!stat || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) {
+      path.setAttribute('fill', NO_DATA_COLOR);
+      path.setAttribute('fill-opacity', '1');
+    } else {
+      const baseline = zoneShotType(zone) === '3PT' ? baselines.threePct : baselines.twoPct;
+      const delta = stat.makes / stat.attempts - (baseline ?? 0);
+      path.setAttribute('fill', relativeColorForDelta(delta));
+      path.setAttribute('fill-opacity', '0.82');
+    }
     path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
     path.setAttribute('stroke-width', '0.15');
     path.dataset.zone = zone;
@@ -306,15 +343,20 @@ function hexCorners(cx, cy, size) {
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
 // metric 'fgpct' colors each hex by its own make% (default); 'attempts' colors by
 // relative volume instead — hex size always tracks volume either way.
-export function drawHexbin(svg, shots, metric = 'fgpct') {
+// baselines: { twoPct, threePct } - see drawZoneOverlay. A bin's baseline is picked
+// by whichever shot type is more common in that bin (bins rarely straddle the 3PT
+// line given how small they are relative to the arc).
+export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
   const bins = new Map();
   shots.forEach((shot) => {
     if (shot.x === undefined || shot.y === undefined) return;
     const { q, r } = pixelToHex(shot.x, shot.y, HEX_SIZE);
     const key = `${q},${r}`;
-    const bin = bins.get(key) || { q, r, attempts: 0, makes: 0 };
+    const bin = bins.get(key) || { q, r, attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
     bin.attempts += 1;
     if (shot.result === 'make') bin.makes += 1;
+    if (shot.shotType === '3PT') bin.attempts3 += 1;
+    else bin.attempts2 += 1;
     bins.set(key, bin);
   });
 
@@ -330,8 +372,16 @@ export function drawHexbin(svg, shots, metric = 'fgpct') {
     const corners = hexCorners(center.x, center.y, HEX_SIZE * 0.92 * sizeScale);
     const polygon = document.createElementNS(SVG_NS, 'polygon');
     polygon.setAttribute('points', corners.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' '));
-    const value = metric === 'attempts' ? bin.attempts / maxAttempts : bin.makes / bin.attempts;
-    polygon.setAttribute('fill', heatColorForRate(value));
+
+    if (metric === 'attempts') {
+      polygon.setAttribute('fill', heatColorForRate(bin.attempts / maxAttempts));
+    } else if (bin.attempts < MIN_ATTEMPTS_FOR_COLOR) {
+      polygon.setAttribute('fill', NO_DATA_COLOR);
+    } else {
+      const baseline = bin.attempts3 > bin.attempts2 ? baselines.threePct : baselines.twoPct;
+      const delta = bin.makes / bin.attempts - (baseline ?? 0);
+      polygon.setAttribute('fill', relativeColorForDelta(delta));
+    }
     polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
     polygon.setAttribute('stroke-width', '0.1');
     group.appendChild(polygon);

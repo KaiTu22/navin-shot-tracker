@@ -3,6 +3,12 @@
 import { getShotSummary, getCountStats, getZoneStats } from './data-store.js';
 import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, drawHexbin, drawHeatmap, ZONES } from './court.js';
 
+export function metricHintText(metric) {
+  return metric === 'attempts'
+    ? 'Brighter = shot from there more often, relative to his most-used spot.'
+    : 'Red = shooting above his own average from there, blue = below. Gray = too few shots yet to tell.';
+}
+
 export function formatPercent(value) {
   if (!Number.isFinite(value)) return '0%';
   return `${Math.round(value * 100)}%`;
@@ -40,9 +46,11 @@ export function renderStatGrid(container, events) {
 export function renderShotChart(svgEl, events, mode, metric = 'fgpct') {
   drawCourt(svgEl);
   if (mode === 'zones') {
-    drawZoneOverlay(svgEl, getZoneStats(events), metric);
+    const { twoPct, threePct } = getShotSummary(events);
+    drawZoneOverlay(svgEl, getZoneStats(events), metric, { twoPct, threePct });
   } else if (mode === 'hex') {
-    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric);
+    const { twoPct, threePct } = getShotSummary(events);
+    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
   } else if (mode === 'heat') {
     drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'));
   } else {

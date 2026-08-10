@@ -25,6 +25,7 @@ import {
   renderGameList,
   renderGameFilterChips,
   filterGames,
+  metricHintText,
   formatDate
 } from './render.js';
 import { installPressFeedback } from './ui-feedback.js';
@@ -50,6 +51,13 @@ const state = {
 };
 
 const METRIC_MODES = ['zones', 'hex'];
+
+function updateMetricHint(hintId, mode, metric) {
+  const hint = el(hintId);
+  const show = METRIC_MODES.includes(mode);
+  hint.classList.toggle('hidden', !show);
+  hint.textContent = show ? metricHintText(metric) : '';
+}
 
 installPressFeedback();
 
@@ -380,6 +388,7 @@ document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((btn) => {
     document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
     el('summary-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.chartMode));
+    updateMetricHint('summary-metric-hint', state.chartMode, state.chartMetric);
     renderSummaryScreen();
   });
 });
@@ -388,6 +397,7 @@ document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((btn) =>
   btn.addEventListener('click', () => {
     state.chartMetric = btn.dataset.metric;
     document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    updateMetricHint('summary-metric-hint', state.chartMode, state.chartMetric);
     renderSummaryScreen();
   });
 });
@@ -412,6 +422,7 @@ document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((btn) => 
     document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('insights-legend').classList.toggle('hidden', state.insightsChartMode !== 'scatter');
     el('insights-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.insightsChartMode));
+    updateMetricHint('insights-metric-hint', state.insightsChartMode, state.insightsChartMetric);
     renderInsightsScreen();
   });
 });
@@ -420,6 +431,7 @@ document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((btn) =
   btn.addEventListener('click', () => {
     state.insightsChartMetric = btn.dataset.metric;
     document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    updateMetricHint('insights-metric-hint', state.insightsChartMode, state.insightsChartMetric);
     renderInsightsScreen();
   });
 });
