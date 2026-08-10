@@ -40,10 +40,14 @@ const state = {
   pendingShot: null,
   periodMode: 'full',
   chartMode: 'scatter',
+  chartMetric: 'fgpct',
   insightsChartMode: 'scatter',
+  insightsChartMetric: 'fgpct',
   insightGameIds: new Set(),
   unsubscribeGames: null
 };
+
+const METRIC_MODES = ['zones', 'hex'];
 
 installPressFeedback();
 
@@ -350,6 +354,15 @@ document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((btn) => {
     state.chartMode = btn.dataset.chartMode;
     document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
+    el('summary-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.chartMode));
+    renderSummaryScreen();
+  });
+});
+
+document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.chartMetric = btn.dataset.metric;
+    document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderSummaryScreen();
   });
 });
@@ -362,7 +375,7 @@ function renderSummaryScreen() {
   el('summary-opponent').textContent = `${game.opponent ? `vs ${game.opponent} • ` : ''}${formatDate(game.date)}`;
   el('summary-points').textContent = summary.points;
   renderStatGrid(el('summary-stat-grid'), game.events);
-  renderShotChart(el('summary-court'), game.events, state.chartMode);
+  renderShotChart(el('summary-court'), game.events, state.chartMode, state.chartMetric);
   renderZoneCards(el('summary-zone-grid'), game.events);
 }
 
@@ -373,6 +386,15 @@ document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((btn) => 
     state.insightsChartMode = btn.dataset.chartMode;
     document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('insights-legend').classList.toggle('hidden', state.insightsChartMode !== 'scatter');
+    el('insights-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.insightsChartMode));
+    renderInsightsScreen();
+  });
+});
+
+document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.insightsChartMetric = btn.dataset.metric;
+    document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderInsightsScreen();
   });
 });
@@ -395,7 +417,7 @@ function renderInsightsScreen() {
   const filteredGames = filterGames(state.games, state.insightGameIds);
   const combinedEvents = filteredGames.flatMap((g) => g.events);
   renderGameFilterChips(el('insights-game-filter'), state.games, state.insightGameIds);
-  renderShotChart(el('insights-court'), combinedEvents, state.insightsChartMode);
+  renderShotChart(el('insights-court'), combinedEvents, state.insightsChartMode, state.insightsChartMetric);
   renderZoneCards(el('insights-zone-grid'), combinedEvents);
   renderTrend(el('insights-trend'), filteredGames, state.selectedGameId);
 }

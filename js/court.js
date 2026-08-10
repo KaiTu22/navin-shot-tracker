@@ -15,9 +15,11 @@ export const LANE_HALF_WIDTH = 6; // NFHS lane is 12ft wide
 export const FREE_THROW_LINE_Y = 19;
 export const FREE_THROW_CIRCLE_RADIUS = 6;
 export const THREE_POINT_RADIUS = 19.75; // 19'9"
-export const COURT_WIDTH = 50;
-export const COURT_HEIGHT = 27;
-export const VIEW_BOX = `-3 -2 ${COURT_WIDTH + 6} ${COURT_HEIGHT + 2}`;
+export const COURT_WIDTH = 50; // NFHS half-court baseline width
+export const COURT_HEIGHT = 42; // NFHS half-court sideline length, baseline to mid-court line
+const PAD_X = 3;
+const PAD_Y = 2;
+export const VIEW_BOX = `${-PAD_X} ${-PAD_Y} ${COURT_WIDTH + 2 * PAD_X} ${COURT_HEIGHT + 2 * PAD_Y}`;
 
 const LANE_LEFT = HOOP.x - LANE_HALF_WIDTH;
 const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
@@ -27,6 +29,11 @@ const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
 const CORNER_LEFT_X = HOOP.x - THREE_POINT_RADIUS;
 const CORNER_RIGHT_X = HOOP.x + THREE_POINT_RADIUS;
 const CORNER_SPLIT_Y = HOOP.y;
+
+// The Zones tab shades rectangular regions for readability, not the literal 2PT/3PT
+// boundary — capping their height keeps "Mid-Range"/"Above Break 3" from stretching
+// all the way up to mid-court just because the tappable court now goes that far.
+const ZONE_DISPLAY_MAX_Y = Math.min(COURT_HEIGHT, HOOP.y + THREE_POINT_RADIUS + 6);
 
 export const ZONES = [
   'Restricted Area',
@@ -113,6 +120,13 @@ function restrictedAreaPath() {
   return pathFromPoints(points);
 }
 
+// Half of the center-court restraining circle, bulging back toward the baseline
+// from the mid-court line - the standard way a half-court diagram closes off its far edge.
+function centerCirclePath() {
+  const points = arcPathPoints(HOOP.x, COURT_HEIGHT, FREE_THROW_CIRCLE_RADIUS, Math.PI / 2, (3 * Math.PI) / 2, 32);
+  return pathFromPoints(points);
+}
+
 export function drawCourt(svg) {
   svg.setAttribute('viewBox', VIEW_BOX);
   svg.innerHTML = `
@@ -122,11 +136,13 @@ export function drawCourt(svg) {
       </filter>
     </defs>
 
-    <rect x="-3" y="-2" width="${COURT_WIDTH + 6}" height="${COURT_HEIGHT + 2}" fill="#d7c79e" />
+    <rect x="${-PAD_X}" y="${-PAD_Y}" width="${COURT_WIDTH + 2 * PAD_X}" height="${COURT_HEIGHT + 2 * PAD_Y}" fill="#d7c79e" />
 
     <path d="M 0 0 L ${COURT_WIDTH} 0" stroke="#f5f5f5" stroke-width="0.3" />
     <path d="M 0 0 L 0 ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
     <path d="M ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
+    <path d="M 0 ${COURT_HEIGHT} L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
+    <path d="${centerCirclePath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" />
 
     <rect x="${LANE_LEFT}" y="0" width="${LANE_HALF_WIDTH * 2}" height="${FREE_THROW_LINE_Y}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
     <path d="M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y}" stroke="#f5f5f5" stroke-width="0.3" />
@@ -156,37 +172,43 @@ function zonePath(zone) {
     case 'Paint (Non-RA)':
       return `M ${LANE_LEFT} 0 L ${LANE_RIGHT} 0 L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_LEFT} ${FREE_THROW_LINE_Y} Z`;
     case 'Mid-Range (Left)':
-      return `M 0 0 L ${LANE_LEFT} 0 L ${LANE_LEFT} ${COURT_HEIGHT} L 0 ${COURT_HEIGHT} Z`;
+      return `M 0 0 L ${LANE_LEFT} 0 L ${LANE_LEFT} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Mid-Range (Right)':
-      return `M ${LANE_RIGHT} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${COURT_HEIGHT} L ${LANE_RIGHT} ${COURT_HEIGHT} Z`;
+      return `M ${LANE_RIGHT} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${LANE_RIGHT} ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Mid-Range (Center)':
-      return `M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${COURT_HEIGHT} L ${LANE_LEFT} ${COURT_HEIGHT} Z`;
+      return `M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${ZONE_DISPLAY_MAX_Y} L ${LANE_LEFT} ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Corner 3 (Left)':
       return `M 0 0 L ${CORNER_LEFT_X} 0 L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L 0 ${CORNER_SPLIT_Y} Z`;
     case 'Corner 3 (Right)':
       return `M ${CORNER_RIGHT_X} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} Z`;
     case 'Above Break 3 (Left)':
-      return `M 0 ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L ${HOOP.x - 5} ${COURT_HEIGHT} L 0 ${COURT_HEIGHT} Z`;
+      return `M 0 ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Above Break 3 (Right)':
-      return `M ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} Z`;
+      return `M ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Above Break 3 (Center)':
-      return `M ${HOOP.x - 5} ${COURT_HEIGHT} L ${HOOP.x + 5} ${COURT_HEIGHT} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} Z`;
+      return `M ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} Z`;
     default:
       return '';
   }
 }
 
 // zoneStats: Map<zoneLabel, {attempts, makes}>
-export function drawZoneOverlay(svg, zoneStats) {
+// metric 'fgpct' colors by make% per zone (default); 'attempts' colors by relative
+// shot volume instead, so you can see where he shoots from most vs. where he's best.
+export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct') {
+  const maxAttempts = Math.max(0, ...[...zoneStats.values()].map((s) => s.attempts));
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'zone-overlay');
   ZONES.forEach((zone) => {
     const stat = zoneStats.get(zone);
-    const rate = stat && stat.attempts ? stat.makes / stat.attempts : null;
+    const value =
+      metric === 'attempts'
+        ? stat && maxAttempts ? stat.attempts / maxAttempts : null
+        : stat && stat.attempts ? stat.makes / stat.attempts : null;
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', zonePath(zone));
-    path.setAttribute('fill', heatColorForRate(rate));
-    path.setAttribute('fill-opacity', rate === null ? '1' : '0.82');
+    path.setAttribute('fill', heatColorForRate(value));
+    path.setAttribute('fill-opacity', value === null ? '1' : '0.82');
     path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
     path.setAttribute('stroke-width', '0.15');
     path.dataset.zone = zone;
@@ -282,7 +304,9 @@ function hexCorners(cx, cy, size) {
 }
 
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
-export function drawHexbin(svg, shots) {
+// metric 'fgpct' colors each hex by its own make% (default); 'attempts' colors by
+// relative volume instead — hex size always tracks volume either way.
+export function drawHexbin(svg, shots, metric = 'fgpct') {
   const bins = new Map();
   shots.forEach((shot) => {
     if (shot.x === undefined || shot.y === undefined) return;
@@ -306,7 +330,8 @@ export function drawHexbin(svg, shots) {
     const corners = hexCorners(center.x, center.y, HEX_SIZE * 0.92 * sizeScale);
     const polygon = document.createElementNS(SVG_NS, 'polygon');
     polygon.setAttribute('points', corners.map((c) => `${c.x.toFixed(2)},${c.y.toFixed(2)}`).join(' '));
-    polygon.setAttribute('fill', heatColorForRate(bin.makes / bin.attempts));
+    const value = metric === 'attempts' ? bin.attempts / maxAttempts : bin.makes / bin.attempts;
+    polygon.setAttribute('fill', heatColorForRate(value));
     polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
     polygon.setAttribute('stroke-width', '0.1');
     group.appendChild(polygon);

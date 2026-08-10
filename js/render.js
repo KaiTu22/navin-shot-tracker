@@ -37,12 +37,12 @@ export function renderStatGrid(container, events) {
   return { summary, counts };
 }
 
-export function renderShotChart(svgEl, events, mode) {
+export function renderShotChart(svgEl, events, mode, metric = 'fgpct') {
   drawCourt(svgEl);
   if (mode === 'zones') {
-    drawZoneOverlay(svgEl, getZoneStats(events));
+    drawZoneOverlay(svgEl, getZoneStats(events), metric);
   } else if (mode === 'hex') {
-    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'));
+    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric);
   } else if (mode === 'heat') {
     drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'));
   } else {

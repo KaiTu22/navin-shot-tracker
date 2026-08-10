@@ -104,7 +104,7 @@
 
           <div class="stat-strip" id="live-stat-strip"></div>
 
-          <div class="court-wrap"><svg id="live-court" role="img" aria-label="Basketball court"></svg></div>
+          <div class="court-wrap"><svg id="live-court" class="court-tappable" role="img" aria-label="Basketball court"></svg></div>
           <div class="shot-legend" id="live-legend">
             <span><span class="legend-dot make"></span>Make</span>
             <span><span class="legend-dot miss"></span>Miss</span>
@@ -167,6 +167,10 @@
             <button class="tab" data-chart-mode="hex">Hex</button>
             <button class="tab" data-chart-mode="heat">Heat</button>
           </div>
+          <div class="metric-toggle hidden" id="summary-metric-toggle">
+            <button type="button" class="metric-btn active" data-metric="fgpct">FG%</button>
+            <button type="button" class="metric-btn" data-metric="attempts">Attempts</button>
+          </div>
           <div class="court-wrap"><svg id="summary-court" role="img" aria-label="Basketball court"></svg></div>
           <div class="shot-legend" id="summary-legend">
             <span><span class="legend-dot make"></span>Make</span>
@@ -196,6 +200,10 @@
             <button class="tab" data-chart-mode="zones">Zones</button>
             <button class="tab" data-chart-mode="hex">Hex</button>
             <button class="tab" data-chart-mode="heat">Heat</button>
+          </div>
+          <div class="metric-toggle hidden" id="insights-metric-toggle">
+            <button type="button" class="metric-btn active" data-metric="fgpct">FG%</button>
+            <button type="button" class="metric-btn" data-metric="attempts">Attempts</button>
           </div>
           <div class="court-wrap"><svg id="insights-court" role="img" aria-label="Basketball court"></svg></div>
           <div class="shot-legend" id="insights-legend">
