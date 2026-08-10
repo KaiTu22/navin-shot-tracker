@@ -1,4 +1,4 @@
-import { firebaseConfig } from './firebase-config.js';
+import { firebaseConfig, TRACKER_UID } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import {
   getAuth,
@@ -13,6 +13,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  getDocs,
   onSnapshot,
   arrayUnion,
   arrayRemove,
@@ -25,6 +26,11 @@ export const auth = getAuth(app);
 const db = getFirestore(app);
 
 export const PLAYER_NAME = 'Navin';
+
+// One tracker account -> one fixed scope, so any browser/device you sign into
+// resolves to the same games (previously this was a random id stored in that
+// browser's localStorage, which meant a new browser saw an empty Games list).
+export const TRACKER_SCOPE_ID = TRACKER_UID;
 
 function gamesCollection(scopeId) {
   return collection(db, 'scopes', scopeId, 'games');
@@ -95,6 +101,18 @@ export function updateGameMeta(scopeId, gameId, fields) {
 
 export function deleteGame(scopeId, gameId) {
   return deleteDoc(gameDoc(scopeId, gameId));
+}
+
+// One-time cleanup for browsers still pointed at a pre-account-scoping random
+// scope id: copies its games into the fixed account scope, then removes the
+// old copies. Returns the number of games migrated.
+export async function migrateGames(oldScopeId, newScopeId) {
+  const snapshot = await getDocs(gamesCollection(oldScopeId));
+  for (const docSnap of snapshot.docs) {
+    await addDoc(gamesCollection(newScopeId), docSnap.data());
+    await deleteDoc(docSnap.ref);
+  }
+  return snapshot.docs.length;
 }
 
 export function endPeriod(scopeId, gameId, nextPeriod) {

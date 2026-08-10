@@ -1,5 +1,6 @@
 import {
   PLAYER_NAME,
+  TRACKER_SCOPE_ID,
   onAuthChange,
   signInTracker,
   signOutTracker,
@@ -7,6 +8,7 @@ import {
   createGame,
   updateGameMeta,
   deleteGame,
+  migrateGames,
   appendEvent,
   logShot,
   undoLastEvent,
@@ -60,18 +62,40 @@ function setActiveNav(name) {
   document.querySelectorAll('.nav-item').forEach((btn) => btn.classList.toggle('active', btn.dataset.nav === name));
 }
 
-function getScopeId() {
-  let scopeId = localStorage.getItem(SCOPE_KEY);
-  if (!scopeId) {
-    scopeId = crypto.randomUUID();
-    localStorage.setItem(SCOPE_KEY, scopeId);
-  }
-  return scopeId;
-}
-
 function getSelectedGame() {
   return state.games.find((g) => g.id === state.selectedGameId) || null;
 }
+
+function checkForLegacyScope() {
+  const legacyScopeId = localStorage.getItem(SCOPE_KEY);
+  const banner = el('migrate-banner');
+  if (legacyScopeId && legacyScopeId !== TRACKER_SCOPE_ID) {
+    banner.classList.remove('hidden');
+    banner.dataset.legacyScopeId = legacyScopeId;
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+el('migrate-btn').addEventListener('click', async () => {
+  const banner = el('migrate-banner');
+  const legacyScopeId = banner.dataset.legacyScopeId;
+  if (!legacyScopeId) return;
+  const btn = el('migrate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Migrating…';
+  try {
+    const count = await migrateGames(legacyScopeId, TRACKER_SCOPE_ID);
+    localStorage.removeItem(SCOPE_KEY);
+    banner.classList.add('hidden');
+    alert(count ? `Moved ${count} game(s) into your account.` : 'No games found in the old browser data — nothing to move.');
+  } catch (error) {
+    console.error('Migration failed', error);
+    btn.disabled = false;
+    btn.textContent = 'Migrate old games';
+    alert('Migration failed — check your connection and try again.');
+  }
+});
 
 // --- Auth ---
 
@@ -84,9 +108,10 @@ onAuthChange((user) => {
     showScreen('signin');
     return;
   }
-  state.scopeId = getScopeId();
+  state.scopeId = TRACKER_SCOPE_ID;
   const shareUrl = `${location.origin}${location.pathname.replace(/index\.html$/, '')}player.html?scope=${state.scopeId}`;
   el('share-link-input').value = shareUrl;
+  checkForLegacyScope();
   state.unsubscribeGames = subscribeToGames(
     state.scopeId,
     (games) => {
