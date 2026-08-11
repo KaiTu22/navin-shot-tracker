@@ -254,7 +254,7 @@ function zonePath(zone) {
       );
     }
     case 'Corner 3 (Right)': {
-      const arc = arcSegment(TANGENT_RIGHT_X, CORNER_ARC_RIGHT_X, 16);
+      const arc = arcSegment(CORNER_ARC_RIGHT_X, TANGENT_RIGHT_X, 16);
       return (
         pathFromPoints([
           { x: COURT_WIDTH, y: 0 },
