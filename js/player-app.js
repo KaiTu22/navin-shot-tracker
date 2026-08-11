@@ -11,6 +11,7 @@ import {
   formatDate
 } from './render.js';
 import { installPressFeedback } from './ui-feedback.js';
+import { installZoneTooltip } from './zone-tooltip.js';
 
 const el = (id) => document.getElementById(id);
 const screens = ['missing-link', 'games', 'summary', 'insights'];
@@ -36,6 +37,8 @@ function updateMetricHint(hintId, mode, metric) {
 }
 
 installPressFeedback();
+installZoneTooltip(el('summary-court').closest('.panel'), el('summary-court'));
+installZoneTooltip(el('insights-court').closest('.panel'), el('insights-court'));
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`)?.classList.toggle('hidden', s !== name));

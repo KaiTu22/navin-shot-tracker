@@ -10,7 +10,6 @@
 // it, it's the true arc.
 
 export const HOOP = { x: 25, y: 5.25 };
-export const RESTRICTED_RADIUS = 3; // not an official NFHS line; used only to bucket rim-level shots for insights
 export const LANE_HALF_WIDTH = 6; // NFHS lane is 12ft wide
 export const FREE_THROW_LINE_Y = 19;
 export const FREE_THROW_CIRCLE_RADIUS = 6;
@@ -24,31 +23,46 @@ export const VIEW_BOX = `${-PAD_X} ${-PAD_Y} ${COURT_WIDTH + 2 * PAD_X} ${COURT_
 const LANE_LEFT = HOOP.x - LANE_HALF_WIDTH;
 const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
 
-// The straight-vs-arc transition happens exactly level with the rim, where the
-// arc's tangent is already vertical - so the corner line and the arc meet smoothly.
-const CORNER_LEFT_X = HOOP.x - THREE_POINT_RADIUS;
-const CORNER_RIGHT_X = HOOP.x + THREE_POINT_RADIUS;
-const CORNER_SPLIT_Y = HOOP.y;
+// Zone *grouping* (below) is independent of shot-type classification (above) - these
+// insight buckets use the same feet-from-baseline/feet-from-rim conventions common
+// shot-chart tools use, not the exact HS 3PT line geometry.
+const RIM_RADIUS = 4.5; // "At the Rim"
+const CORNER_CUTOFF_Y = 14; // corner 3 vs above-the-break 3
 
 // The Zones tab shades rectangular regions for readability, not the literal 2PT/3PT
-// boundary — capping their height keeps "Mid-Range"/"Above Break 3" from stretching
-// all the way up to mid-court just because the tappable court now goes that far.
+// boundary — capping their height keeps "Above Break 3" from stretching all the way
+// up to mid-court just because the tappable court now goes that far.
 const ZONE_DISPLAY_MAX_Y = Math.min(COURT_HEIGHT, HOOP.y + THREE_POINT_RADIUS + 6);
 
 export const ZONES = [
-  'Restricted Area',
-  'Paint (Non-RA)',
-  'Mid-Range (Left)',
-  'Mid-Range (Center)',
-  'Mid-Range (Right)',
+  'Midrange 2s',
   'Corner 3 (Left)',
   'Corner 3 (Right)',
-  'Above Break 3 (Left)',
+  'Above Break 3 (Left Wing)',
   'Above Break 3 (Center)',
-  'Above Break 3 (Right)'
+  'Above Break 3 (Right Wing)',
+  'In The Paint',
+  'At The Rim'
 ];
 
-const THREE_PT_ZONES = new Set(['Corner 3 (Left)', 'Corner 3 (Right)', 'Above Break 3 (Left)', 'Above Break 3 (Center)', 'Above Break 3 (Right)']);
+export const ZONE_DESCRIPTIONS = {
+  'At The Rim': `Within ${RIM_RADIUS} feet of the rim`,
+  'In The Paint': 'Shots taken in the paint (non-rim)',
+  'Midrange 2s': 'All 2s outside the paint',
+  'Corner 3 (Left)': `Within ${CORNER_CUTOFF_Y} feet of the baseline`,
+  'Corner 3 (Right)': `Within ${CORNER_CUTOFF_Y} feet of the baseline`,
+  'Above Break 3 (Left Wing)': `Greater than ${CORNER_CUTOFF_Y} feet from the baseline`,
+  'Above Break 3 (Center)': `Greater than ${CORNER_CUTOFF_Y} feet from the baseline`,
+  'Above Break 3 (Right Wing)': `Greater than ${CORNER_CUTOFF_Y} feet from the baseline`
+};
+
+const THREE_PT_ZONES = new Set([
+  'Corner 3 (Left)',
+  'Corner 3 (Right)',
+  'Above Break 3 (Left Wing)',
+  'Above Break 3 (Center)',
+  'Above Break 3 (Right Wing)'
+]);
 export function zoneShotType(zone) {
   return THREE_PT_ZONES.has(zone) ? '3PT' : '2PT';
 }
@@ -67,17 +81,14 @@ export function classifyShot(x, y) {
 export function zoneForPoint(x, y) {
   const type = classifyShot(x, y);
   if (type === '3PT') {
-    if (x <= CORNER_LEFT_X) return 'Corner 3 (Left)';
-    if (x >= CORNER_RIGHT_X) return 'Corner 3 (Right)';
-    if (x < HOOP.x - 5) return 'Above Break 3 (Left)';
-    if (x > HOOP.x + 5) return 'Above Break 3 (Right)';
+    if (y <= CORNER_CUTOFF_Y) return x < HOOP.x ? 'Corner 3 (Left)' : 'Corner 3 (Right)';
+    if (x < HOOP.x - 5) return 'Above Break 3 (Left Wing)';
+    if (x > HOOP.x + 5) return 'Above Break 3 (Right Wing)';
     return 'Above Break 3 (Center)';
   }
-  if (distanceFromHoop(x, y) <= RESTRICTED_RADIUS) return 'Restricted Area';
-  if (x >= LANE_LEFT && x <= LANE_RIGHT && y <= FREE_THROW_LINE_Y) return 'Paint (Non-RA)';
-  if (x < LANE_LEFT) return 'Mid-Range (Left)';
-  if (x > LANE_RIGHT) return 'Mid-Range (Right)';
-  return 'Mid-Range (Center)';
+  if (distanceFromHoop(x, y) <= RIM_RADIUS) return 'At The Rim';
+  if (x >= LANE_LEFT && x <= LANE_RIGHT && y <= FREE_THROW_LINE_Y) return 'In The Paint';
+  return 'Midrange 2s';
 }
 
 // Maps a client (mouse/touch) event on the court SVG to court-space (feet) coordinates,
@@ -115,13 +126,15 @@ function pathFromPoints(points) {
 function threePointPath() {
   // Straight segment down to the baseline, then the true arc (tangent at the
   // seam, level with the rim), then straight back down on the other side.
+  // (This is the real court line's tangent point - always HOOP.y, independent of
+  // the zone-grouping CORNER_CUTOFF_Y used only for shading buckets below.)
   const arcPoints = arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2, 48);
-  const points = [{ x: CORNER_LEFT_X, y: 0 }, ...arcPoints, { x: CORNER_RIGHT_X, y: 0 }];
+  const points = [{ x: HOOP.x - THREE_POINT_RADIUS, y: 0 }, ...arcPoints, { x: HOOP.x + THREE_POINT_RADIUS, y: 0 }];
   return pathFromPoints(points);
 }
 
-function restrictedAreaPath() {
-  const points = arcPathPoints(HOOP.x, HOOP.y, RESTRICTED_RADIUS, -Math.PI / 2, Math.PI / 2, 24);
+function rimArcPath() {
+  const points = arcPathPoints(HOOP.x, HOOP.y, RIM_RADIUS, -Math.PI / 2, Math.PI / 2, 24);
   return pathFromPoints(points);
 }
 
@@ -155,7 +168,7 @@ export function drawCourt(svg) {
 
     <path d="M ${HOOP.x - 3} 4 L ${HOOP.x + 3} 4" stroke="#f5f5f5" stroke-width="0.4" />
     <circle cx="${HOOP.x}" cy="${HOOP.y}" r="0.75" fill="none" stroke="#ff7a1a" stroke-width="0.3" />
-    <path d="${restrictedAreaPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
+    <path d="${rimArcPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
 
     <path d="${threePointPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
   `;
@@ -192,31 +205,76 @@ export function relativeColorForDelta(delta) {
   return magnitude >= 0.18 ? BLUE_STRONG : BLUE_MILD;
 }
 
+// Shapes are approximate rectangles for shading, not the true arc boundary (as
+// elsewhere in this file). Draw order in ZONES matters here: "In The Paint" and
+// "At The Rim" are drawn last so they always render correctly on top regardless of
+// what the wider Midrange/Corner/Above-Break rectangles beneath them cover.
 function zonePath(zone) {
   switch (zone) {
-    case 'Restricted Area':
-      return `M ${HOOP.x - RESTRICTED_RADIUS} ${HOOP.y} A ${RESTRICTED_RADIUS} ${RESTRICTED_RADIUS} 0 0 0 ${HOOP.x + RESTRICTED_RADIUS} ${HOOP.y} L ${HOOP.x + RESTRICTED_RADIUS} 0 L ${HOOP.x - RESTRICTED_RADIUS} 0 Z`;
-    case 'Paint (Non-RA)':
-      return `M ${LANE_LEFT} 0 L ${LANE_RIGHT} 0 L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_LEFT} ${FREE_THROW_LINE_Y} Z`;
-    case 'Mid-Range (Left)':
-      return `M 0 0 L ${LANE_LEFT} 0 L ${LANE_LEFT} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Mid-Range (Right)':
-      return `M ${LANE_RIGHT} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${LANE_RIGHT} ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Mid-Range (Center)':
-      return `M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${ZONE_DISPLAY_MAX_Y} L ${LANE_LEFT} ${ZONE_DISPLAY_MAX_Y} Z`;
+    case 'Midrange 2s':
+      return `M 0 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Corner 3 (Left)':
-      return `M 0 0 L ${CORNER_LEFT_X} 0 L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L 0 ${CORNER_SPLIT_Y} Z`;
+      return `M 0 0 L ${HOOP.x} 0 L ${HOOP.x} ${CORNER_CUTOFF_Y} L 0 ${CORNER_CUTOFF_Y} Z`;
     case 'Corner 3 (Right)':
-      return `M ${CORNER_RIGHT_X} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} Z`;
-    case 'Above Break 3 (Left)':
-      return `M 0 ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Above Break 3 (Right)':
-      return `M ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${CORNER_SPLIT_Y} L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} Z`;
+      return `M ${HOOP.x} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_CUTOFF_Y} L ${HOOP.x} ${CORNER_CUTOFF_Y} Z`;
+    case 'Above Break 3 (Left Wing)':
+      return `M 0 ${CORNER_CUTOFF_Y} L ${HOOP.x - 5} ${CORNER_CUTOFF_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
+    case 'Above Break 3 (Right Wing)':
+      return `M ${HOOP.x + 5} ${CORNER_CUTOFF_Y} L ${COURT_WIDTH} ${CORNER_CUTOFF_Y} L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} Z`;
     case 'Above Break 3 (Center)':
-      return `M ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} L ${CORNER_RIGHT_X} ${CORNER_SPLIT_Y} L ${CORNER_LEFT_X} ${CORNER_SPLIT_Y} Z`;
+      return `M ${HOOP.x - 5} ${CORNER_CUTOFF_Y} L ${HOOP.x + 5} ${CORNER_CUTOFF_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} Z`;
+    case 'In The Paint':
+      return `M ${LANE_LEFT} 0 L ${LANE_RIGHT} 0 L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_LEFT} ${FREE_THROW_LINE_Y} Z`;
+    case 'At The Rim':
+      return `M ${HOOP.x - RIM_RADIUS} ${HOOP.y} A ${RIM_RADIUS} ${RIM_RADIUS} 0 0 0 ${HOOP.x + RIM_RADIUS} ${HOOP.y} L ${HOOP.x + RIM_RADIUS} 0 L ${HOOP.x - RIM_RADIUS} 0 Z`;
     default:
       return '';
   }
+}
+
+function zoneLabelPosition(zone) {
+  const midY = (CORNER_CUTOFF_Y + ZONE_DISPLAY_MAX_Y) / 2;
+  switch (zone) {
+    case 'At The Rim':
+      return { x: HOOP.x, y: HOOP.y + 1.6 };
+    case 'In The Paint':
+      return { x: HOOP.x, y: (HOOP.y + RIM_RADIUS + FREE_THROW_LINE_Y) / 2 + 1 };
+    case 'Midrange 2s':
+      return { x: HOOP.x - LANE_HALF_WIDTH - 6, y: 9 };
+    case 'Corner 3 (Left)':
+      return { x: HOOP.x / 2, y: CORNER_CUTOFF_Y / 2 };
+    case 'Corner 3 (Right)':
+      return { x: (HOOP.x + COURT_WIDTH) / 2, y: CORNER_CUTOFF_Y / 2 };
+    case 'Above Break 3 (Left Wing)':
+      return { x: (HOOP.x - 5) / 2, y: midY };
+    case 'Above Break 3 (Right Wing)':
+      return { x: (HOOP.x + 5 + COURT_WIDTH) / 2, y: midY };
+    case 'Above Break 3 (Center)':
+      return { x: HOOP.x, y: midY };
+    default:
+      return { x: HOOP.x, y: HOOP.y };
+  }
+}
+
+function buildZoneTooltip(zone, stat, metric, baselines) {
+  const description = ZONE_DESCRIPTIONS[zone] || '';
+  if (!stat || !stat.attempts) {
+    return `${zone}\n${description}\n\nNo attempts logged yet.`;
+  }
+  const rate = stat.makes / stat.attempts;
+  if (metric === 'attempts') {
+    return `${zone}\n${description}\n\n${stat.attempts} attempt${stat.attempts === 1 ? '' : 's'} (${stat.makes} made, ${Math.round(rate * 100)}%).`;
+  }
+  const shotType = zoneShotType(zone);
+  const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+  const deltaPct = Math.round((rate - baseline) * 100);
+  const sign = deltaPct >= 0 ? 'above' : 'below';
+  return (
+    `${zone}\n${description}\n\n` +
+    `His FG% here is ${Math.round(rate * 100)}% (${stat.makes}/${stat.attempts}).\n` +
+    `His ${shotType} baseline is ${Math.round(baseline * 100)}%.\n` +
+    `That's ${Math.abs(deltaPct)}% ${sign} his average.`
+  );
 }
 
 // zoneStats: Map<zoneLabel, {attempts, makes}>
@@ -233,13 +291,16 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = {}
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', zonePath(zone));
 
+    let hasColor = true;
     if (metric === 'attempts') {
       const value = stat && maxAttempts ? stat.attempts / maxAttempts : null;
       path.setAttribute('fill', heatColorForRate(value));
       path.setAttribute('fill-opacity', value === null ? '1' : '0.82');
+      hasColor = value !== null;
     } else if (!stat || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) {
       path.setAttribute('fill', NO_DATA_COLOR);
       path.setAttribute('fill-opacity', '1');
+      hasColor = false;
     } else {
       const baseline = zoneShotType(zone) === '3PT' ? baselines.threePct : baselines.twoPct;
       const delta = stat.makes / stat.attempts - (baseline ?? 0);
@@ -249,7 +310,24 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = {}
     path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
     path.setAttribute('stroke-width', '0.15');
     path.dataset.zone = zone;
+    path.dataset.tooltip = buildZoneTooltip(zone, stat, metric, baselines);
     group.appendChild(path);
+
+    const pos = zoneLabelPosition(zone);
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', pos.x);
+    label.setAttribute('y', pos.y);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.setAttribute('font-size', '2.4');
+    label.setAttribute('font-weight', '800');
+    label.setAttribute('fill', hasColor ? '#ffffff' : 'rgba(255,255,255,0.55)');
+    label.setAttribute('paint-order', 'stroke');
+    label.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+    label.setAttribute('stroke-width', '0.4');
+    label.style.pointerEvents = 'none';
+    label.textContent = stat && stat.attempts ? `${Math.round((stat.makes / stat.attempts) * 100)}%` : '—';
+    group.appendChild(label);
   });
   svg.appendChild(group);
 }
