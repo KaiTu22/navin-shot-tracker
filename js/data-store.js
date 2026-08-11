@@ -130,12 +130,10 @@ export function appendEvent(scopeId, gameId, event, period) {
 }
 
 export function logShot(scopeId, gameId, { x, y, shotType, result }, period) {
-  return appendEvent(
-    scopeId,
-    gameId,
-    { type: 'shot', shotType, result, x, y, zone: zoneForPoint(x, y) },
-    period
-  );
+  // No stored zone label here on purpose - it's always recomputed from x/y (see
+  // getZoneStats below) so a future zone redefinition can't leave old shots
+  // stranded under a zone name that no longer exists.
+  return appendEvent(scopeId, gameId, { type: 'shot', shotType, result, x, y }, period);
 }
 
 export function undoLastEvent(scopeId, gameId, events) {
@@ -206,14 +204,18 @@ export function getCountStats(events) {
 }
 
 // Only real shot attempts carry a court location — free throws are excluded by construction.
+// Zone is computed fresh from x/y every time (never trusted from stored data) so a
+// zone-definition change applies retroactively to every shot ever logged, instead of
+// leaving old shots stranded under a zone name that no longer exists.
 export function getZoneStats(events) {
   const zoneStats = new Map();
   for (const event of events) {
-    if (event.type !== 'shot' || !event.zone) continue;
-    const entry = zoneStats.get(event.zone) || { attempts: 0, makes: 0 };
+    if (event.type !== 'shot' || event.x === undefined || event.y === undefined) continue;
+    const zone = zoneForPoint(event.x, event.y);
+    const entry = zoneStats.get(zone) || { attempts: 0, makes: 0 };
     entry.attempts += 1;
     if (event.result === 'make') entry.makes += 1;
-    zoneStats.set(event.zone, entry);
+    zoneStats.set(zone, entry);
   }
   return zoneStats;
 }
