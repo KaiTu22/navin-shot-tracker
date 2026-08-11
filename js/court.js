@@ -25,14 +25,34 @@ const LANE_RIGHT = HOOP.x + LANE_HALF_WIDTH;
 
 // Zone *grouping* (below) is independent of shot-type classification (above) - these
 // insight buckets use the same feet-from-baseline/feet-from-rim conventions common
-// shot-chart tools use, not the exact HS 3PT line geometry.
+// shot-chart tools use, not the exact HS 3PT line geometry. But the zone *shapes*
+// drawn for shading DO follow the true 3PT arc/tangent boundary exactly (see
+// arcSegment/angleForX below) - a zone's shaded area never bleeds across the real
+// 2PT/3PT line, so a shot's zone membership always matches what's colored under it.
 const RIM_RADIUS = 4.5; // "At the Rim"
 const CORNER_CUTOFF_Y = 14; // corner 3 vs above-the-break 3
 
-// The Zones tab shades rectangular regions for readability, not the literal 2PT/3PT
-// boundary — capping their height keeps "Above Break 3" from stretching all the way
-// up to mid-court just because the tappable court now goes that far.
+// Capping height keeps "Above Break 3" from stretching all the way up to mid-court
+// just because the tappable court now goes that far.
 const ZONE_DISPLAY_MAX_Y = Math.min(COURT_HEIGHT, HOOP.y + THREE_POINT_RADIUS + 6);
+
+// The angle (in the arcPathPoints φ convention below) at which the arc passes
+// through a given x. Angle-based sampling is used for every arc segment here
+// (never sampling evenly in x) because the arc's slope is vertical right at the
+// tangent points - evenly-spaced x samples badly under-approximate the curve
+// exactly there, while evenly-spaced angles stay accurate everywhere.
+function angleForX(x) {
+  return Math.asin((x - HOOP.x) / THREE_POINT_RADIUS);
+}
+
+const TANGENT_LEFT_X = HOOP.x - THREE_POINT_RADIUS;
+const TANGENT_RIGHT_X = HOOP.x + THREE_POINT_RADIUS;
+// Where the arc itself crosses y = CORNER_CUTOFF_Y (solving the circle equation) -
+// the exact point where the corner-vs-above-break shading boundary meets the arc.
+const CORNER_ARC_LEFT_X = HOOP.x - Math.sqrt(THREE_POINT_RADIUS ** 2 - (CORNER_CUTOFF_Y - HOOP.y) ** 2);
+const CORNER_ARC_RIGHT_X = HOOP.x + Math.sqrt(THREE_POINT_RADIUS ** 2 - (CORNER_CUTOFF_Y - HOOP.y) ** 2);
+const WING_LEFT_X = HOOP.x - 5;
+const WING_RIGHT_X = HOOP.x + 5;
 
 export const ZONES = [
   'Midrange 2s',
@@ -205,24 +225,74 @@ export function relativeColorForDelta(delta) {
   return magnitude >= 0.18 ? BLUE_STRONG : BLUE_MILD;
 }
 
-// Shapes are approximate rectangles for shading, not the true arc boundary (as
-// elsewhere in this file). Draw order in ZONES matters here: "In The Paint" and
+// Shapes trace the true arc/tangent boundary exactly (sampled by angle, never by
+// x - see angleForX above). Draw order in ZONES matters here: "In The Paint" and
 // "At The Rim" are drawn last so they always render correctly on top regardless of
-// what the wider Midrange/Corner/Above-Break rectangles beneath them cover.
+// what the wider Midrange/Corner/Above-Break shapes beneath them cover.
+function arcSegment(xFrom, xTo, steps) {
+  return arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, angleForX(xFrom), angleForX(xTo), steps);
+}
+
 function zonePath(zone) {
   switch (zone) {
-    case 'Midrange 2s':
-      return `M 0 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Corner 3 (Left)':
-      return `M 0 0 L ${HOOP.x} 0 L ${HOOP.x} ${CORNER_CUTOFF_Y} L 0 ${CORNER_CUTOFF_Y} Z`;
-    case 'Corner 3 (Right)':
-      return `M ${HOOP.x} 0 L ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${CORNER_CUTOFF_Y} L ${HOOP.x} ${CORNER_CUTOFF_Y} Z`;
-    case 'Above Break 3 (Left Wing)':
-      return `M 0 ${CORNER_CUTOFF_Y} L ${HOOP.x - 5} ${CORNER_CUTOFF_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} L 0 ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Above Break 3 (Right Wing)':
-      return `M ${HOOP.x + 5} ${CORNER_CUTOFF_Y} L ${COURT_WIDTH} ${CORNER_CUTOFF_Y} L ${COURT_WIDTH} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} Z`;
-    case 'Above Break 3 (Center)':
-      return `M ${HOOP.x - 5} ${CORNER_CUTOFF_Y} L ${HOOP.x + 5} ${CORNER_CUTOFF_Y} L ${HOOP.x + 5} ${ZONE_DISPLAY_MAX_Y} L ${HOOP.x - 5} ${ZONE_DISPLAY_MAX_Y} Z`;
+    case 'Midrange 2s': {
+      // The full 2PT "stadium" - straight tangent down to the baseline on each
+      // side, true arc across the top. Exactly the classifyShot() 2PT region.
+      const arc = arcPathPoints(HOOP.x, HOOP.y, THREE_POINT_RADIUS, -Math.PI / 2, Math.PI / 2, 48);
+      return pathFromPoints([{ x: TANGENT_LEFT_X, y: 0 }, ...arc, { x: TANGENT_RIGHT_X, y: 0 }]) + ' Z';
+    }
+    case 'Corner 3 (Left)': {
+      const arc = arcSegment(CORNER_ARC_LEFT_X, TANGENT_LEFT_X, 16);
+      return (
+        pathFromPoints([
+          { x: 0, y: 0 },
+          { x: 0, y: CORNER_CUTOFF_Y },
+          { x: CORNER_ARC_LEFT_X, y: CORNER_CUTOFF_Y },
+          ...arc,
+          { x: TANGENT_LEFT_X, y: 0 }
+        ]) + ' Z'
+      );
+    }
+    case 'Corner 3 (Right)': {
+      const arc = arcSegment(TANGENT_RIGHT_X, CORNER_ARC_RIGHT_X, 16);
+      return (
+        pathFromPoints([
+          { x: COURT_WIDTH, y: 0 },
+          { x: COURT_WIDTH, y: CORNER_CUTOFF_Y },
+          { x: CORNER_ARC_RIGHT_X, y: CORNER_CUTOFF_Y },
+          ...arc,
+          { x: TANGENT_RIGHT_X, y: 0 }
+        ]) + ' Z'
+      );
+    }
+    case 'Above Break 3 (Left Wing)': {
+      const arc = arcSegment(WING_LEFT_X, CORNER_ARC_LEFT_X, 24);
+      return (
+        pathFromPoints([
+          { x: 0, y: CORNER_CUTOFF_Y },
+          { x: 0, y: ZONE_DISPLAY_MAX_Y },
+          { x: WING_LEFT_X, y: ZONE_DISPLAY_MAX_Y },
+          ...arc,
+          { x: CORNER_ARC_LEFT_X, y: CORNER_CUTOFF_Y }
+        ]) + ' Z'
+      );
+    }
+    case 'Above Break 3 (Right Wing)': {
+      const arc = arcSegment(CORNER_ARC_RIGHT_X, WING_RIGHT_X, 24);
+      return (
+        pathFromPoints([
+          { x: COURT_WIDTH, y: CORNER_CUTOFF_Y },
+          { x: CORNER_ARC_RIGHT_X, y: CORNER_CUTOFF_Y },
+          ...arc,
+          { x: WING_RIGHT_X, y: ZONE_DISPLAY_MAX_Y },
+          { x: COURT_WIDTH, y: ZONE_DISPLAY_MAX_Y }
+        ]) + ' Z'
+      );
+    }
+    case 'Above Break 3 (Center)': {
+      const arc = arcSegment(WING_RIGHT_X, WING_LEFT_X, 24);
+      return pathFromPoints([{ x: WING_LEFT_X, y: ZONE_DISPLAY_MAX_Y }, { x: WING_RIGHT_X, y: ZONE_DISPLAY_MAX_Y }, ...arc]) + ' Z';
+    }
     case 'In The Paint':
       return `M ${LANE_LEFT} 0 L ${LANE_RIGHT} 0 L ${LANE_RIGHT} ${FREE_THROW_LINE_Y} L ${LANE_LEFT} ${FREE_THROW_LINE_Y} Z`;
     case 'At The Rim':
@@ -242,15 +312,15 @@ function zoneLabelPosition(zone) {
     case 'Midrange 2s':
       return { x: HOOP.x - LANE_HALF_WIDTH - 6, y: 9 };
     case 'Corner 3 (Left)':
-      return { x: HOOP.x / 2, y: CORNER_CUTOFF_Y / 2 };
+      return { x: 3, y: CORNER_CUTOFF_Y / 2 };
     case 'Corner 3 (Right)':
-      return { x: (HOOP.x + COURT_WIDTH) / 2, y: CORNER_CUTOFF_Y / 2 };
+      return { x: COURT_WIDTH - 3, y: CORNER_CUTOFF_Y / 2 };
     case 'Above Break 3 (Left Wing)':
-      return { x: (HOOP.x - 5) / 2, y: midY };
+      return { x: 9, y: midY };
     case 'Above Break 3 (Right Wing)':
-      return { x: (HOOP.x + 5 + COURT_WIDTH) / 2, y: midY };
+      return { x: COURT_WIDTH - 9, y: midY };
     case 'Above Break 3 (Center)':
-      return { x: HOOP.x, y: midY };
+      return { x: HOOP.x, y: HOOP.y + THREE_POINT_RADIUS + 3 };
     default:
       return { x: HOOP.x, y: HOOP.y };
   }
