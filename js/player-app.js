@@ -27,7 +27,7 @@ const state = {
   insightGameIds: new Set()
 };
 
-const METRIC_MODES = ['zones', 'hex'];
+const METRIC_MODES = ['zones', 'hex', 'rings'];
 
 function updateMetricHint(hintId, mode, metric) {
   const hint = el(hintId);

@@ -1,7 +1,7 @@
 // Shared render helpers used by both the tracker app and the read-only player app,
 // so the two views never drift out of sync on how a stat is computed or displayed.
 import { getShotSummary, getCountStats, getZoneStats } from './data-store.js';
-import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, drawHexbin, drawHeatmap, ZONES } from './court.js';
+import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, drawHexbin, drawHeatmap, drawRingOverlay, ZONES } from './court.js';
 
 export function metricHintText(metric) {
   return metric === 'attempts'
@@ -51,6 +51,9 @@ export function renderShotChart(svgEl, events, mode, metric = 'fgpct') {
   } else if (mode === 'hex') {
     const { twoPct, threePct } = getShotSummary(events);
     drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
+  } else if (mode === 'rings') {
+    const { twoPct, threePct } = getShotSummary(events);
+    drawRingOverlay(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
   } else if (mode === 'heat') {
     drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'));
   } else {

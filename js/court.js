@@ -407,6 +407,177 @@ export function removeZoneOverlay(svg) {
   if (existing) existing.remove();
 }
 
+// --- Distance-ring x side-wedge grid: same "vs. his own baseline" coloring as Zones,
+// but partitioned purely by distance-from-hoop and angle instead of basketball zone
+// names. Insights-only (season aggregates) - a single game's shot count spreads too
+// thin across ~30 cells to mean much.
+const RING_BOUNDARIES = [RIM_RADIUS, 9, 14, THREE_POINT_RADIUS, 24, 200]; // last = "24ft+", 200 is just a generous catch-all
+const RING_LABELS = ['4.5-9ft', '9-14ft', '14-19.75ft', '19.75-24ft', '24ft+'];
+const WEDGE_BOUNDARIES = [-Math.PI / 2, -Math.PI / 3, -Math.PI / 6, 0, Math.PI / 6, Math.PI / 3, Math.PI / 2];
+const WEDGE_LABELS = ['Far Left', 'Left', 'Center-Left', 'Center-Right', 'Right', 'Far Right'];
+
+function ringIndexForDistance(d) {
+  if (d < RING_BOUNDARIES[0]) return -1; // -1 = the unsplit "At the Rim" disc
+  for (let i = 1; i < RING_BOUNDARIES.length; i++) {
+    if (d < RING_BOUNDARIES[i]) return i - 1;
+  }
+  return RING_BOUNDARIES.length - 2;
+}
+
+function wedgeIndexForAngle(angle) {
+  const clamped = Math.max(WEDGE_BOUNDARIES[0], Math.min(WEDGE_BOUNDARIES[WEDGE_BOUNDARIES.length - 1], angle));
+  for (let i = 0; i < WEDGE_BOUNDARIES.length - 1; i++) {
+    if (clamped <= WEDGE_BOUNDARIES[i + 1]) return i;
+  }
+  return WEDGE_BOUNDARIES.length - 2;
+}
+
+function ringCellPath(ringIdx, wedgeIdx) {
+  const r1 = RING_BOUNDARIES[ringIdx];
+  const r2 = RING_BOUNDARIES[ringIdx + 1];
+  const a1 = WEDGE_BOUNDARIES[wedgeIdx];
+  const a2 = WEDGE_BOUNDARIES[wedgeIdx + 1];
+  const outer = arcPathPoints(HOOP.x, HOOP.y, r2, a1, a2, 12);
+  const inner = arcPathPoints(HOOP.x, HOOP.y, r1, a2, a1, 12);
+  return pathFromPoints([...outer, ...inner]) + ' Z';
+}
+
+function rimDiscPath() {
+  const arc = arcPathPoints(HOOP.x, HOOP.y, RING_BOUNDARIES[0], -Math.PI / 2, Math.PI / 2, 24);
+  return pathFromPoints([HOOP, ...arc]) + ' Z';
+}
+
+function ringCellLabelPosition(ringIdx, wedgeIdx) {
+  const outerBound = ringIdx === RING_BOUNDARIES.length - 2 ? RING_BOUNDARIES[ringIdx] + 4 : RING_BOUNDARIES[ringIdx + 1];
+  const midR = (RING_BOUNDARIES[ringIdx] + outerBound) / 2;
+  const midA = (WEDGE_BOUNDARIES[wedgeIdx] + WEDGE_BOUNDARIES[wedgeIdx + 1]) / 2;
+  return { x: HOOP.x + midR * Math.sin(midA), y: HOOP.y + midR * Math.cos(midA) };
+}
+
+function buildRingTooltip(label, stat, metric, shotType, baselines) {
+  if (!stat || !stat.attempts) return `${label}\nNo attempts logged yet.`;
+  const rate = stat.makes / stat.attempts;
+  if (metric === 'attempts') {
+    return `${label}\n${stat.attempts} attempt${stat.attempts === 1 ? '' : 's'} (${stat.makes} made, ${Math.round(rate * 100)}%).`;
+  }
+  const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+  const deltaPct = Math.round((rate - baseline) * 100);
+  const sign = deltaPct >= 0 ? 'above' : 'below';
+  return (
+    `${label}\n` +
+    `FG% here: ${Math.round(rate * 100)}% (${stat.makes}/${stat.attempts}).\n` +
+    `His ${shotType} baseline: ${Math.round(baseline * 100)}%.\n` +
+    `That's ${Math.abs(deltaPct)}% ${sign} his average.`
+  );
+}
+
+// shots: array of { x, y, shotType, result } for made/missed field goal attempts only.
+export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
+  const rim = { attempts: 0, makes: 0 };
+  const cells = new Map(); // key `${ringIdx}:${wedgeIdx}` -> { attempts, makes, attempts2, attempts3 }
+
+  shots.forEach((shot) => {
+    if (shot.x === undefined || shot.y === undefined) return;
+    const dx = shot.x - HOOP.x;
+    const dy = shot.y - HOOP.y;
+    const distance = Math.hypot(dx, dy);
+    const ringIdx = ringIndexForDistance(distance);
+    const isMake = shot.result === 'make';
+    if (ringIdx === -1) {
+      rim.attempts += 1;
+      if (isMake) rim.makes += 1;
+      return;
+    }
+    const angle = Math.atan2(dx, dy);
+    const wedgeIdx = wedgeIndexForAngle(angle);
+    const key = `${ringIdx}:${wedgeIdx}`;
+    const cell = cells.get(key) || { attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
+    cell.attempts += 1;
+    if (isMake) cell.makes += 1;
+    if (shot.shotType === '3PT') cell.attempts3 += 1;
+    else cell.attempts2 += 1;
+    cells.set(key, cell);
+  });
+
+  const maxAttempts = Math.max(rim.attempts, 0, ...[...cells.values()].map((c) => c.attempts));
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  group.setAttribute('id', 'ring-overlay');
+
+  function colorAndTooltip(stat, shotType, label) {
+    if (metric === 'attempts') {
+      const value = stat.attempts && maxAttempts ? stat.attempts / maxAttempts : null;
+      return { fill: heatColorForRate(value), tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+    }
+    if (!stat.attempts || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) {
+      return { fill: NO_DATA_COLOR, tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+    }
+    const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+    const delta = stat.makes / stat.attempts - baseline;
+    return { fill: relativeColorForDelta(delta), tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+  }
+
+  // Rim disc (unsplit)
+  const rimResult = colorAndTooltip(rim, '2PT', 'At the Rim (0-4.5ft)');
+  const rimPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  rimPath.setAttribute('d', rimDiscPath());
+  rimPath.setAttribute('fill', rimResult.fill);
+  rimPath.setAttribute('fill-opacity', metric === 'attempts' && !rim.attempts ? '1' : '0.85');
+  rimPath.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  rimPath.setAttribute('stroke-width', '0.15');
+  rimPath.dataset.tooltip = rimResult.tooltip;
+  group.appendChild(rimPath);
+  const rimLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  rimLabel.setAttribute('x', HOOP.x);
+  rimLabel.setAttribute('y', HOOP.y + 2);
+  rimLabel.setAttribute('text-anchor', 'middle');
+  rimLabel.setAttribute('dominant-baseline', 'middle');
+  rimLabel.setAttribute('font-size', '2.3');
+  rimLabel.setAttribute('font-weight', '800');
+  rimLabel.setAttribute('fill', '#ffffff');
+  rimLabel.setAttribute('paint-order', 'stroke');
+  rimLabel.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+  rimLabel.setAttribute('stroke-width', '0.4');
+  rimLabel.style.pointerEvents = 'none';
+  rimLabel.textContent = rim.attempts ? `${Math.round((rim.makes / rim.attempts) * 100)}%` : '—';
+  group.appendChild(rimLabel);
+
+  for (let ringIdx = 0; ringIdx < RING_LABELS.length; ringIdx++) {
+    for (let wedgeIdx = 0; wedgeIdx < WEDGE_LABELS.length; wedgeIdx++) {
+      const stat = cells.get(`${ringIdx}:${wedgeIdx}`) || { attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
+      const shotType = stat.attempts3 > stat.attempts2 ? '3PT' : '2PT';
+      const label = `${RING_LABELS[ringIdx]} — ${WEDGE_LABELS[wedgeIdx]}`;
+      const result = colorAndTooltip(stat, shotType, label);
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', ringCellPath(ringIdx, wedgeIdx));
+      path.setAttribute('fill', result.fill);
+      path.setAttribute('fill-opacity', metric === 'attempts' && !stat.attempts ? '1' : '0.85');
+      path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+      path.setAttribute('stroke-width', '0.15');
+      path.dataset.tooltip = result.tooltip;
+      group.appendChild(path);
+
+      const pos = ringCellLabelPosition(ringIdx, wedgeIdx);
+      const label2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label2.setAttribute('x', pos.x);
+      label2.setAttribute('y', pos.y);
+      label2.setAttribute('text-anchor', 'middle');
+      label2.setAttribute('dominant-baseline', 'middle');
+      label2.setAttribute('font-size', '1.5');
+      label2.setAttribute('font-weight', '800');
+      label2.setAttribute('fill', '#ffffff');
+      label2.setAttribute('paint-order', 'stroke');
+      label2.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+      label2.setAttribute('stroke-width', '0.28');
+      label2.style.pointerEvents = 'none';
+      label2.textContent = stat.attempts ? `${Math.round((stat.makes / stat.attempts) * 100)}%` : '—';
+      group.appendChild(label2);
+    }
+  }
+
+  svg.appendChild(group);
+}
+
 // Shots are colorblind-safe by shape, not just color: makes are filled dots, misses are rings.
 export function drawShots(svg, shots) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
