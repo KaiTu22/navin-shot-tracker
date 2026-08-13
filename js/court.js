@@ -758,15 +758,24 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function diverging(pct) {
-  const [c1, c2, t] =
-    pct <= HEAT_MIDPOINT
-      ? [HEAT_BELOW_AVG, HEAT_NEUTRAL, pct / HEAT_MIDPOINT]
-      : [HEAT_NEUTRAL, HEAT_ABOVE_AVG, (pct - HEAT_MIDPOINT) / (1 - HEAT_MIDPOINT)];
+function blend(c1, c2, t) {
   const r = Math.round(lerp(c1[0], c2[0], t));
   const g = Math.round(lerp(c1[1], c2[1], t));
   const b = Math.round(lerp(c1[2], c2[2], t));
   return `rgb(${r},${g},${b})`;
+}
+
+// Stretches color to the range actually observed in THIS data (maxAbove/maxBelow),
+// rather than a fixed assumed spread - see the call site in drawHeatmap for why: a
+// small or naturally tight-spread dataset still gets a fully-saturated hot and cold
+// spot instead of everything landing close to neutral gray.
+function divergingNormalized(pct, baseline, maxAbove, maxBelow) {
+  if (pct >= baseline) {
+    const t = Math.min(1, (pct - baseline) / maxAbove);
+    return blend(HEAT_NEUTRAL, HEAT_ABOVE_AVG, t);
+  }
+  const t = Math.min(1, (baseline - pct) / maxBelow);
+  return blend(HEAT_NEUTRAL, HEAT_BELOW_AVG, t);
 }
 
 function gaussianWeight(dx, dy, sigma) {
@@ -774,7 +783,10 @@ function gaussianWeight(dx, dy, sigma) {
 }
 
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
-export function drawHeatmap(svg, shots) {
+// baseline: his real overall FG% for the shots being charted (falls back to a generic
+// assumption if not given). This is the "neutral gray" anchor point - not just a fixed
+// 45%, so the color scale is honest about what "average" means for this specific dataset.
+export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
   const points = shots.filter((s) => s.x !== undefined && s.y !== undefined);
   if (!points.length) return;
 
@@ -794,6 +806,16 @@ export function drawHeatmap(svg, shots) {
     }
   }
 
+  // Stretch the color scale to whatever spread is actually present among the
+  // reasonably-confident cells, instead of assuming a fixed spread - a small or
+  // naturally tight-spread dataset still gets a fully-saturated hot and cold spot
+  // rather than every cell landing close to neutral gray because none of them happen
+  // to reach some fixed, arbitrary "very good"/"very bad" threshold.
+  const meaningfulCells = cells.filter((c) => c.weight >= HEAT_CONFIDENCE_WEIGHT * 0.4);
+  const reference = meaningfulCells.length ? meaningfulCells : cells;
+  const maxAbove = Math.max(0.05, ...reference.map((c) => c.pct - baseline));
+  const maxBelow = Math.max(0.05, ...reference.map((c) => baseline - c.pct));
+
   const group = document.createElementNS(SVG_NS, 'g');
   group.setAttribute('id', 'heatmap');
   group.setAttribute('filter', 'url(#heat-blur)');
@@ -803,7 +825,7 @@ export function drawHeatmap(svg, shots) {
     rect.setAttribute('y', (cell.gy - HEAT_GRID_STEP / 2).toFixed(2));
     rect.setAttribute('width', HEAT_GRID_STEP);
     rect.setAttribute('height', HEAT_GRID_STEP);
-    rect.setAttribute('fill', diverging(cell.pct));
+    rect.setAttribute('fill', divergingNormalized(cell.pct, baseline, maxAbove, maxBelow));
     // Capped below 1.0 so even a fully-confident area stays a wash rather than a solid
     // mask - keeps it reading as a heatmap over the court, not a poster on top of it.
     const confidence = Math.pow(cell.weight / HEAT_CONFIDENCE_WEIGHT, HEAT_OPACITY_CURVE);

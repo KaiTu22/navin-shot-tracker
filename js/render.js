@@ -55,7 +55,8 @@ export function renderShotChart(svgEl, events, mode, metric = 'fgpct') {
     const { twoPct, threePct } = getShotSummary(events);
     drawRingOverlay(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
   } else if (mode === 'heat') {
-    drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'));
+    const { overallPct } = getShotSummary(events);
+    drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'), overallPct);
   } else {
     drawShots(svgEl, events.filter((e) => e.type === 'shot'));
   }
