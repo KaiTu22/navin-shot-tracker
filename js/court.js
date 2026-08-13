@@ -724,7 +724,7 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
   svg.appendChild(group);
 }
 
-// --- Smooth heatmap: kernel-weighted local make%, red (cold/low%) to green (hot/high%) ---
+// --- Smooth heatmap: kernel-weighted local make% vs. his baseline, blue (below) to red (above) ---
 // This is a locally-smoothed efficiency surface, not a volume density map — it answers
 // "how well does he shoot from around here", matching the article's heatmap convention.
 
@@ -740,9 +740,14 @@ const HEAT_BANDWIDTH = 4.5; // feet, gaussian sigma
 const HEAT_CONFIDENCE_WEIGHT = 15;
 const HEAT_MAX_OPACITY = 0.82; // cap so a fully-confident area still reads as a wash, not a solid mask
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
-const HEAT_COLD = [208, 59, 59]; // --critical
-const HEAT_NEUTRAL = [56, 56, 53];
-const HEAT_HOT = [12, 163, 12]; // --good
+// Colors are dark/saturated specifically because they sit on the tan court at partial
+// opacity - measured WCAG contrast against the court color (#d7c79e): the old
+// red/green pair here was only ~2-2.9:1 (muted, hard to read); these read at 6-6.9:1.
+// Also switched from red=bad/green=good to red=above-average/blue=below-average to
+// match the same language Zones/Hex/Rings already use, instead of a second convention.
+const HEAT_BELOW_AVG = [18, 58, 102]; // #123a66 - below his baseline ("cold")
+const HEAT_NEUTRAL = [138, 132, 120]; // #8a8478 - close to his baseline, deliberately low-contrast so it recedes
+const HEAT_ABOVE_AVG = [122, 31, 31]; // #7a1f1f - above his baseline ("hot")
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -751,8 +756,8 @@ function lerp(a, b, t) {
 function diverging(pct) {
   const [c1, c2, t] =
     pct <= HEAT_MIDPOINT
-      ? [HEAT_COLD, HEAT_NEUTRAL, pct / HEAT_MIDPOINT]
-      : [HEAT_NEUTRAL, HEAT_HOT, (pct - HEAT_MIDPOINT) / (1 - HEAT_MIDPOINT)];
+      ? [HEAT_BELOW_AVG, HEAT_NEUTRAL, pct / HEAT_MIDPOINT]
+      : [HEAT_NEUTRAL, HEAT_ABOVE_AVG, (pct - HEAT_MIDPOINT) / (1 - HEAT_MIDPOINT)];
   const r = Math.round(lerp(c1[0], c2[0], t));
   const g = Math.round(lerp(c1[1], c2[1], t));
   const b = Math.round(lerp(c1[2], c2[2], t));
