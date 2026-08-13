@@ -200,21 +200,21 @@ function centerCirclePath() {
 
 function courtLinesMarkup() {
   return `
-    <path d="M 0 0 L ${COURT_WIDTH} 0" stroke="#f5f5f5" stroke-width="0.3" />
-    <path d="M 0 0 L 0 ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
-    <path d="M ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
-    <path d="M 0 ${COURT_HEIGHT} L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
-    <path d="${centerCirclePath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" />
+    <path d="M 0 0 L ${COURT_WIDTH} 0" stroke="#3a3a35" stroke-width="0.3" />
+    <path d="M 0 0 L 0 ${COURT_HEIGHT}" stroke="#3a3a35" stroke-width="0.3" />
+    <path d="M ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#3a3a35" stroke-width="0.3" />
+    <path d="M 0 ${COURT_HEIGHT} L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#3a3a35" stroke-width="0.3" />
+    <path d="${centerCirclePath()}" fill="none" stroke="#3a3a35" stroke-width="0.25" />
 
-    <rect x="${LANE_LEFT}" y="0" width="${LANE_HALF_WIDTH * 2}" height="${FREE_THROW_LINE_Y}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
-    <path d="M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y}" stroke="#f5f5f5" stroke-width="0.3" />
-    <circle cx="${HOOP.x}" cy="${FREE_THROW_LINE_Y}" r="${FREE_THROW_CIRCLE_RADIUS}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="1 1" />
+    <rect x="${LANE_LEFT}" y="0" width="${LANE_HALF_WIDTH * 2}" height="${FREE_THROW_LINE_Y}" fill="none" stroke="#3a3a35" stroke-width="0.3" />
+    <path d="M ${LANE_LEFT} ${FREE_THROW_LINE_Y} L ${LANE_RIGHT} ${FREE_THROW_LINE_Y}" stroke="#3a3a35" stroke-width="0.3" />
+    <circle cx="${HOOP.x}" cy="${FREE_THROW_LINE_Y}" r="${FREE_THROW_CIRCLE_RADIUS}" fill="none" stroke="#3a3a35" stroke-width="0.25" stroke-dasharray="1 1" />
 
-    <path d="M ${HOOP.x - 3} 4 L ${HOOP.x + 3} 4" stroke="#f5f5f5" stroke-width="0.4" />
+    <path d="M ${HOOP.x - 3} 4 L ${HOOP.x + 3} 4" stroke="#3a3a35" stroke-width="0.4" />
     <circle cx="${HOOP.x}" cy="${HOOP.y}" r="0.75" fill="none" stroke="#ff7a1a" stroke-width="0.3" />
-    <path d="${rimArcPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
+    <path d="${rimArcPath()}" fill="none" stroke="#3a3a35" stroke-width="0.25" stroke-dasharray="0.6 0.6" />
 
-    <path d="${threePointPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
+    <path d="${threePointPath()}" fill="none" stroke="#3a3a35" stroke-width="0.3" />
   `;
 }
 
@@ -227,7 +227,7 @@ export function drawCourt(svg) {
       </filter>
     </defs>
 
-    <rect x="${-PAD_X}" y="${-PAD_Y}" width="${COURT_WIDTH + 2 * PAD_X}" height="${COURT_HEIGHT + 2 * PAD_Y}" fill="#d7c79e" />
+    <rect x="${-PAD_X}" y="${-PAD_Y}" width="${COURT_WIDTH + 2 * PAD_X}" height="${COURT_HEIGHT + 2 * PAD_Y}" fill="#f7f4ec" />
 
     ${courtLinesMarkup()}
   `;
@@ -247,7 +247,7 @@ export function redrawCourtLinesOnTop(svg) {
 // toward the surface, high value brightens to stand out (inverse of the light-mode convention).
 const HEAT_STEPS = ['#0d366b', '#104281', '#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5'];
 export function heatColorForRate(pct) {
-  if (pct === null || pct === undefined) return 'rgba(255,255,255,0.04)';
+  if (pct === null || pct === undefined) return 'rgba(0,0,0,0.05)';
   const idx = Math.min(HEAT_STEPS.length - 1, Math.floor(pct * HEAT_STEPS.length));
   return HEAT_STEPS[idx];
 }
@@ -260,13 +260,13 @@ export function heatColorForRate(pct) {
 // whatever spread is actually present in the current dataset, so every chart on the
 // app reads the same way.
 export const MIN_ATTEMPTS_FOR_COLOR = 2; // fewer attempts than this = not enough data to color meaningfully
-const NO_DATA_COLOR = 'rgba(255,255,255,0.04)';
+const NO_DATA_COLOR = 'rgba(0,0,0,0.05)';
 
-// Colors are dark/saturated specifically because they sit on the tan court at partial
-// opacity - measured WCAG contrast against the court color (#d7c79e): a naive red/green
-// pair here was only ~2-2.9:1 (muted, hard to read); these read at 4.85-6.14:1. Picking a
-// notably darker red than green gives a lightness cue on top of the hue difference, since
-// red-green is otherwise the classic confusable pair for red-green colorblindness.
+// Colors are dark/saturated specifically because they sit on the court at partial
+// opacity - measured WCAG contrast against the court color (#f7f4ec): these read at
+// 7.38-9.35:1. Picking a notably darker red than green gives a lightness cue on top of
+// the hue difference, since red-green is otherwise the classic confusable pair for
+// red-green colorblindness.
 const DIVERGING_BELOW = [122, 31, 31]; // #7a1f1f - below baseline ("cold" / lower%)
 const DIVERGING_NEUTRAL = [138, 132, 120]; // #8a8478 - close to baseline, deliberately low-contrast so it recedes
 const DIVERGING_ABOVE = [26, 92, 26]; // #1a5c1a - above baseline ("hot" / higher%)
@@ -469,7 +469,7 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = ne
       path.setAttribute('fill', normalizedDivergingColor(rate, baseline, maxAbove, maxBelow));
       path.setAttribute('fill-opacity', '0.82');
     }
-    path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+    path.setAttribute('stroke', 'rgba(0,0,0,0.22)');
     path.setAttribute('stroke-width', '0.15');
     path.dataset.zone = zone;
     path.dataset.tooltip = buildZoneTooltip(zone, stat, metric, baselines, baselineMode);
@@ -483,7 +483,7 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = ne
     label.setAttribute('dominant-baseline', 'middle');
     label.setAttribute('font-size', '2.4');
     label.setAttribute('font-weight', '800');
-    label.setAttribute('fill', hasColor ? '#ffffff' : 'rgba(255,255,255,0.55)');
+    label.setAttribute('fill', hasColor ? '#ffffff' : 'rgba(0,0,0,0.45)');
     label.setAttribute('paint-order', 'stroke');
     label.setAttribute('stroke', 'rgba(0,0,0,0.55)');
     label.setAttribute('stroke-width', '0.4');
@@ -637,7 +637,7 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
   rimPath.setAttribute('d', rimDiscPath());
   rimPath.setAttribute('fill', rimResult.fill);
   rimPath.setAttribute('fill-opacity', metric === 'attempts' && !rim.attempts ? '1' : '0.85');
-  rimPath.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+  rimPath.setAttribute('stroke', 'rgba(0,0,0,0.22)');
   rimPath.setAttribute('stroke-width', '0.15');
   rimPath.dataset.tooltip = rimResult.tooltip;
   group.appendChild(rimPath);
@@ -668,7 +668,7 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
       path.setAttribute('d', ringCellPath(ringIdx, wedgeIdx));
       path.setAttribute('fill', result.fill);
       path.setAttribute('fill-opacity', metric === 'attempts' && !stat.attempts ? '1' : '0.85');
-      path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
+      path.setAttribute('stroke', 'rgba(0,0,0,0.22)');
       path.setAttribute('stroke-width', '0.15');
       path.dataset.tooltip = result.tooltip;
       group.appendChild(path);
@@ -829,7 +829,7 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = new Map()) 
       const rate = bin.makes / bin.attempts;
       polygon.setAttribute('fill', normalizedDivergingColor(rate, baseline, maxAbove, maxBelow));
     }
-    polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
+    polygon.setAttribute('stroke', 'rgba(0,0,0,0.3)');
     polygon.setAttribute('stroke-width', '0.1');
     group.appendChild(polygon);
   });
