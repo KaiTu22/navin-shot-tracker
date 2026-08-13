@@ -190,7 +190,7 @@ export function drawCourt(svg) {
   svg.innerHTML = `
     <defs>
       <filter id="heat-blur" x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="1" />
+        <feGaussianBlur stdDeviation="0.65" />
       </filter>
     </defs>
 
@@ -729,16 +729,21 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
 // "how well does he shoot from around here", matching the article's heatmap convention.
 
 const HEAT_GRID_STEP = 1.5; // feet
-const HEAT_BANDWIDTH = 4.5; // feet, gaussian sigma
+const HEAT_BANDWIDTH = 2.8; // feet, gaussian sigma - tighter than a naive choice so distinct
+// clusters (rim vs. paint vs. wing) stay visually separated instead of smearing together
 // Opacity is confidence, scaled against this absolute amount of local kernel weight -
 // NOT against whatever the single densest spot on this particular chart achieves.
 // A tight, high-volume cluster (shots at the rim are almost always packed into a small
 // area) will always out-density a real, well-sampled but more spread-out area (e.g. the
 // 3PT arc) - normalizing to the chart's own max makes every non-rim zone look faint even
 // with plenty of real data behind it. This constant is calibrated so a cluster of roughly
-// 15 nearby attempts reaches full opacity, independent of what's happening elsewhere.
-const HEAT_CONFIDENCE_WEIGHT = 15;
-const HEAT_MAX_OPACITY = 0.82; // cap so a fully-confident area still reads as a wash, not a solid mask
+// 11 nearby attempts reaches full opacity, independent of what's happening elsewhere.
+const HEAT_CONFIDENCE_WEIGHT = 11;
+const HEAT_MAX_OPACITY = 0.92; // cap so a fully-confident area still reads as a wash, not a solid mask
+// Square-root curve so moderately-sampled areas (not just the single most-sampled spot)
+// ramp up to a visually bold color quickly, rather than needing near-maximum weight to
+// look like anything at all.
+const HEAT_OPACITY_CURVE = 0.5;
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
 // Colors are dark/saturated specifically because they sit on the tan court at partial
 // opacity - measured WCAG contrast against the court color (#d7c79e): the old
@@ -801,7 +806,8 @@ export function drawHeatmap(svg, shots) {
     rect.setAttribute('fill', diverging(cell.pct));
     // Capped below 1.0 so even a fully-confident area stays a wash rather than a solid
     // mask - keeps it reading as a heatmap over the court, not a poster on top of it.
-    rect.setAttribute('opacity', Math.min(HEAT_MAX_OPACITY, cell.weight / HEAT_CONFIDENCE_WEIGHT).toFixed(2));
+    const confidence = Math.pow(cell.weight / HEAT_CONFIDENCE_WEIGHT, HEAT_OPACITY_CURVE);
+    rect.setAttribute('opacity', Math.min(HEAT_MAX_OPACITY, confidence).toFixed(2));
     group.appendChild(rect);
   });
   svg.appendChild(group);
