@@ -26,8 +26,8 @@ export function chartHintText(mode, metric, baselineMode = 'self') {
     return 'Brighter = shot from there more often, relative to his most-used spot.';
   }
   return baselineMode === 'benchmark'
-    ? 'Red = shooting above a typical HS player’s average from there, blue = below. Gray = too few shots yet to tell.'
-    : 'Red = shooting above his own average from there, blue = below. Gray = too few shots yet to tell.';
+    ? 'Green = shooting above a typical HS player’s average from there, red = below. Gray = too few shots yet to tell.'
+    : 'Green = shooting above his own average from there, red = below. Gray = too few shots yet to tell.';
 }
 
 export function formatPercent(value) {
