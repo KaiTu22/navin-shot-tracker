@@ -25,7 +25,7 @@ import {
   renderGameList,
   renderGameFilterChips,
   filterGames,
-  metricHintText,
+  chartHintText,
   formatDate
 } from './render.js';
 import { installPressFeedback } from './ui-feedback.js';
@@ -46,19 +46,25 @@ const state = {
   periodMode: 'full',
   chartMode: 'scatter',
   chartMetric: 'fgpct',
+  chartBaseline: 'self',
   insightsChartMode: 'scatter',
   insightsChartMetric: 'fgpct',
+  insightsChartBaseline: 'self',
   insightGameIds: new Set(),
   unsubscribeGames: null
 };
 
 const METRIC_MODES = ['zones', 'hex', 'rings'];
+const BASELINE_MODES = ['zones', 'hex', 'rings', 'heat'];
 
-function updateMetricHint(hintId, mode, metric) {
-  const hint = el(hintId);
-  const show = METRIC_MODES.includes(mode);
-  hint.classList.toggle('hidden', !show);
-  hint.textContent = show ? metricHintText(metric) : '';
+function updateChartControls(prefix, mode, metric, baselineMode) {
+  const hint = el(`${prefix}-metric-hint`);
+  const baselineToggle = el(`${prefix}-baseline-toggle`);
+  const showHint = METRIC_MODES.includes(mode) || mode === 'heat';
+  hint.classList.toggle('hidden', !showHint);
+  hint.textContent = showHint ? chartHintText(mode, metric, baselineMode) : '';
+  const showBaselineToggle = BASELINE_MODES.includes(mode) && (mode === 'heat' || metric === 'fgpct');
+  baselineToggle.classList.toggle('hidden', !showBaselineToggle);
 }
 
 installPressFeedback();
@@ -398,7 +404,7 @@ document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((btn) => {
     document.querySelectorAll('#screen-summary .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('summary-legend').classList.toggle('hidden', state.chartMode !== 'scatter');
     el('summary-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.chartMode));
-    updateMetricHint('summary-metric-hint', state.chartMode, state.chartMetric);
+    updateChartControls('summary', state.chartMode, state.chartMetric, state.chartBaseline);
     renderSummaryScreen();
   });
 });
@@ -407,7 +413,16 @@ document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((btn) =>
   btn.addEventListener('click', () => {
     state.chartMetric = btn.dataset.metric;
     document.querySelectorAll('#summary-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
-    updateMetricHint('summary-metric-hint', state.chartMode, state.chartMetric);
+    updateChartControls('summary', state.chartMode, state.chartMetric, state.chartBaseline);
+    renderSummaryScreen();
+  });
+});
+
+document.querySelectorAll('#summary-baseline-toggle .metric-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.chartBaseline = btn.dataset.baseline;
+    document.querySelectorAll('#summary-baseline-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    updateChartControls('summary', state.chartMode, state.chartMetric, state.chartBaseline);
     renderSummaryScreen();
   });
 });
@@ -420,7 +435,7 @@ function renderSummaryScreen() {
   el('summary-opponent').textContent = `${game.opponent ? `vs ${game.opponent} • ` : ''}${formatDate(game.date)}`;
   el('summary-points').textContent = summary.points;
   renderStatGrid(el('summary-stat-grid'), game.events);
-  renderShotChart(el('summary-court'), game.events, state.chartMode, state.chartMetric);
+  renderShotChart(el('summary-court'), game.events, state.chartMode, state.chartMetric, state.chartBaseline);
   renderZoneCards(el('summary-zone-grid'), game.events);
 }
 
@@ -432,7 +447,7 @@ document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((btn) => 
     document.querySelectorAll('#screen-insights .chart-tabs .tab').forEach((b) => b.classList.toggle('active', b === btn));
     el('insights-legend').classList.toggle('hidden', state.insightsChartMode !== 'scatter');
     el('insights-metric-toggle').classList.toggle('hidden', !METRIC_MODES.includes(state.insightsChartMode));
-    updateMetricHint('insights-metric-hint', state.insightsChartMode, state.insightsChartMetric);
+    updateChartControls('insights', state.insightsChartMode, state.insightsChartMetric, state.insightsChartBaseline);
     renderInsightsScreen();
   });
 });
@@ -441,7 +456,16 @@ document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((btn) =
   btn.addEventListener('click', () => {
     state.insightsChartMetric = btn.dataset.metric;
     document.querySelectorAll('#insights-metric-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
-    updateMetricHint('insights-metric-hint', state.insightsChartMode, state.insightsChartMetric);
+    updateChartControls('insights', state.insightsChartMode, state.insightsChartMetric, state.insightsChartBaseline);
+    renderInsightsScreen();
+  });
+});
+
+document.querySelectorAll('#insights-baseline-toggle .metric-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.insightsChartBaseline = btn.dataset.baseline;
+    document.querySelectorAll('#insights-baseline-toggle .metric-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    updateChartControls('insights', state.insightsChartMode, state.insightsChartMetric, state.insightsChartBaseline);
     renderInsightsScreen();
   });
 });
@@ -464,7 +488,7 @@ function renderInsightsScreen() {
   const filteredGames = filterGames(state.games, state.insightGameIds);
   const combinedEvents = filteredGames.flatMap((g) => g.events);
   renderGameFilterChips(el('insights-game-filter'), state.games, state.insightGameIds);
-  renderShotChart(el('insights-court'), combinedEvents, state.insightsChartMode, state.insightsChartMetric);
+  renderShotChart(el('insights-court'), combinedEvents, state.insightsChartMode, state.insightsChartMetric, state.insightsChartBaseline);
   renderZoneCards(el('insights-zone-grid'), combinedEvents);
   renderTrend(el('insights-trend'), filteredGames, state.selectedGameId);
 }

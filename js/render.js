@@ -1,11 +1,32 @@
 // Shared render helpers used by both the tracker app and the read-only player app,
 // so the two views never drift out of sync on how a stat is computed or displayed.
 import { getShotSummary, getCountStats, getZoneStats } from './data-store.js';
-import { drawCourt, drawShots, drawZoneOverlay, removeZoneOverlay, drawHexbin, drawHeatmap, drawRingOverlay, ZONES } from './court.js';
+import {
+  drawCourt,
+  drawShots,
+  drawZoneOverlay,
+  removeZoneOverlay,
+  drawHexbin,
+  drawHeatmap,
+  drawRingOverlay,
+  zoneBaselineMap,
+  benchmarkAt,
+  ZONES
+} from './court.js';
 
-export function metricHintText(metric) {
-  return metric === 'attempts'
-    ? 'Brighter = shot from there more often, relative to his most-used spot.'
+// baselineMode: 'self' (default) compares against his own average; 'benchmark' compares
+// against typical HS shooting percentages by shot difficulty instead.
+export function chartHintText(mode, metric, baselineMode = 'self') {
+  if (mode === 'heat') {
+    return baselineMode === 'benchmark'
+      ? 'Green = shooting above a typical HS player’s average from there, red = below.'
+      : 'Green = shooting above his own average from there, red = below.';
+  }
+  if (metric === 'attempts') {
+    return 'Brighter = shot from there more often, relative to his most-used spot.';
+  }
+  return baselineMode === 'benchmark'
+    ? 'Red = shooting above a typical HS player’s average from there, blue = below. Gray = too few shots yet to tell.'
     : 'Red = shooting above his own average from there, blue = below. Gray = too few shots yet to tell.';
 }
 
@@ -43,20 +64,21 @@ export function renderStatGrid(container, events) {
   return { summary, counts };
 }
 
-export function renderShotChart(svgEl, events, mode, metric = 'fgpct') {
+export function renderShotChart(svgEl, events, mode, metric = 'fgpct', baselineMode = 'self') {
   drawCourt(svgEl);
   if (mode === 'zones') {
-    const { twoPct, threePct } = getShotSummary(events);
-    drawZoneOverlay(svgEl, getZoneStats(events), metric, { twoPct, threePct });
+    const baselines = zoneBaselineMap(baselineMode, getShotSummary(events));
+    drawZoneOverlay(svgEl, getZoneStats(events), metric, baselines, baselineMode);
   } else if (mode === 'hex') {
-    const { twoPct, threePct } = getShotSummary(events);
-    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
+    const baselines = zoneBaselineMap(baselineMode, getShotSummary(events));
+    drawHexbin(svgEl, events.filter((e) => e.type === 'shot'), metric, baselines);
   } else if (mode === 'rings') {
-    const { twoPct, threePct } = getShotSummary(events);
-    drawRingOverlay(svgEl, events.filter((e) => e.type === 'shot'), metric, { twoPct, threePct });
+    const baselines = zoneBaselineMap(baselineMode, getShotSummary(events));
+    drawRingOverlay(svgEl, events.filter((e) => e.type === 'shot'), metric, baselines, baselineMode);
   } else if (mode === 'heat') {
     const { overallPct } = getShotSummary(events);
-    drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'), overallPct);
+    const baseline = baselineMode === 'benchmark' ? benchmarkAt : overallPct;
+    drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'), baseline);
   } else {
     drawShots(svgEl, events.filter((e) => e.type === 'shot'));
   }

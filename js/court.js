@@ -111,6 +111,39 @@ export function zoneForPoint(x, y) {
   return 'Midrange 2s';
 }
 
+function zoneBenchmarkCategory(zone) {
+  if (zone === 'At The Rim') return 'rim';
+  if (zone === 'In The Paint') return 'paint';
+  if (zone === 'Midrange 2s') return 'midrange';
+  return 'three';
+}
+
+// Typical HS shooting percentages by shot difficulty (independent of Navin's own
+// data) - lets a chart grade a spot against a realistic external target instead of
+// only ever falling back to "not enough data yet" gray in a small/early-season sample.
+const BENCHMARKS = {
+  rim: 0.525, // at the rim / layups: ~50-55%
+  paint: 0.325, // short floaters/hooks: ~30-35%
+  midrange: 0.34, // mid-range, 10ft to the 3PT line: ~32-36%
+  three: 0.3 // HS three-pointers: ~28-32%
+};
+
+// Returns a Map<zone, baseline%>. 'self' (default) uses his own overall 2PT/3PT split;
+// 'benchmark' uses the external HS averages above, split more finely across the 4 shot
+// -difficulty categories instead of just 2PT/3PT.
+export function zoneBaselineMap(mode, summary) {
+  if (mode === 'benchmark') {
+    return new Map(ZONES.map((zone) => [zone, BENCHMARKS[zoneBenchmarkCategory(zone)]]));
+  }
+  return new Map(ZONES.map((zone) => [zone, zoneShotType(zone) === '3PT' ? summary.threePct : summary.twoPct]));
+}
+
+// Same benchmark lookup as zoneBaselineMap, but for an arbitrary point - used by
+// Heat, which isn't confined to the 8 named Zones.
+export function benchmarkAt(x, y) {
+  return BENCHMARKS[zoneBenchmarkCategory(zoneForPoint(x, y))];
+}
+
 // Maps a client (mouse/touch) event on the court SVG to court-space (feet) coordinates,
 // correctly accounting for viewBox letterboxing via the SVG's own screen transform.
 export function pointFromEvent(svg, evt) {
@@ -342,7 +375,11 @@ function zoneLabelPosition(zone) {
   }
 }
 
-function buildZoneTooltip(zone, stat, metric, baselines) {
+function baselineLabel(baselineMode) {
+  return baselineMode === 'benchmark' ? 'a typical HS player’s average' : 'his own average';
+}
+
+function buildZoneTooltip(zone, stat, metric, baselines, baselineMode) {
   const description = ZONE_DESCRIPTIONS[zone] || '';
   if (!stat || !stat.attempts) {
     return `${zone}\n${description}\n\nNo attempts logged yet.`;
@@ -351,24 +388,25 @@ function buildZoneTooltip(zone, stat, metric, baselines) {
   if (metric === 'attempts') {
     return `${zone}\n${description}\n\n${stat.attempts} attempt${stat.attempts === 1 ? '' : 's'} (${stat.makes} made, ${Math.round(rate * 100)}%).`;
   }
-  const shotType = zoneShotType(zone);
-  const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+  const baseline = baselines.get(zone) ?? 0;
   const deltaPct = Math.round((rate - baseline) * 100);
   const sign = deltaPct >= 0 ? 'above' : 'below';
+  const baselineName = baselineMode === 'benchmark' ? 'Typical HS average here' : 'His baseline here';
   return (
     `${zone}\n${description}\n\n` +
     `His FG% here is ${Math.round(rate * 100)}% (${stat.makes}/${stat.attempts}).\n` +
-    `His ${shotType} baseline is ${Math.round(baseline * 100)}%.\n` +
-    `That's ${Math.abs(deltaPct)}% ${sign} his average.`
+    `${baselineName} is ${Math.round(baseline * 100)}%.\n` +
+    `That's ${Math.abs(deltaPct)}% ${sign} ${baselineLabel(baselineMode)}.`
   );
 }
 
 // zoneStats: Map<zoneLabel, {attempts, makes}>
 // metric 'fgpct' colors by make% per zone (default); 'attempts' colors by relative
 // shot volume instead, so you can see where he shoots from most vs. where he's best.
-// baselines: { twoPct, threePct } - his own overall make% by shot type, from the
-// same dataset being charted. Only used in 'fgpct' metric mode.
-export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = {}) {
+// baselines: Map<zone, baseline%> from zoneBaselineMap() - either his own overall make%
+// by shot type, or the external HS benchmark, depending on baselineMode. Only used in
+// 'fgpct' metric mode.
+export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = new Map(), baselineMode = 'self') {
   const maxAttempts = Math.max(0, ...[...zoneStats.values()].map((s) => s.attempts));
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'zone-overlay');
@@ -388,15 +426,15 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = {}
       path.setAttribute('fill-opacity', '1');
       hasColor = false;
     } else {
-      const baseline = zoneShotType(zone) === '3PT' ? baselines.threePct : baselines.twoPct;
-      const delta = stat.makes / stat.attempts - (baseline ?? 0);
+      const baseline = baselines.get(zone) ?? 0;
+      const delta = stat.makes / stat.attempts - baseline;
       path.setAttribute('fill', relativeColorForDelta(delta));
       path.setAttribute('fill-opacity', '0.82');
     }
     path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
     path.setAttribute('stroke-width', '0.15');
     path.dataset.zone = zone;
-    path.dataset.tooltip = buildZoneTooltip(zone, stat, metric, baselines);
+    path.dataset.tooltip = buildZoneTooltip(zone, stat, metric, baselines, baselineMode);
     group.appendChild(path);
 
     const pos = zoneLabelPosition(zone);
@@ -470,27 +508,30 @@ function ringCellLabelPosition(ringIdx, wedgeIdx) {
   return { x: HOOP.x + midR * Math.sin(midA), y: HOOP.y + midR * Math.cos(midA) };
 }
 
-function buildRingTooltip(label, stat, metric, shotType, baselines) {
+function buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) {
   if (!stat || !stat.attempts) return `${label}\nNo attempts logged yet.`;
   const rate = stat.makes / stat.attempts;
   if (metric === 'attempts') {
     return `${label}\n${stat.attempts} attempt${stat.attempts === 1 ? '' : 's'} (${stat.makes} made, ${Math.round(rate * 100)}%).`;
   }
-  const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+  const baseline = baselines.get(zone) ?? 0;
   const deltaPct = Math.round((rate - baseline) * 100);
   const sign = deltaPct >= 0 ? 'above' : 'below';
+  const baselineName = baselineMode === 'benchmark' ? 'Typical HS average here' : 'His baseline here';
   return (
     `${label}\n` +
     `FG% here: ${Math.round(rate * 100)}% (${stat.makes}/${stat.attempts}).\n` +
-    `His ${shotType} baseline: ${Math.round(baseline * 100)}%.\n` +
-    `That's ${Math.abs(deltaPct)}% ${sign} his average.`
+    `${baselineName}: ${Math.round(baseline * 100)}%.\n` +
+    `That's ${Math.abs(deltaPct)}% ${sign} ${baselineLabel(baselineMode)}.`
   );
 }
 
 // shots: array of { x, y, shotType, result } for made/missed field goal attempts only.
-export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
+// baselines: Map<zone, baseline%> from zoneBaselineMap() - a cell's baseline is picked
+// by classifying its representative court point via zoneForPoint(), same as Zones.
+export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Map(), baselineMode = 'self') {
   const rim = { attempts: 0, makes: 0 };
-  const cells = new Map(); // key `${ringIdx}:${wedgeIdx}` -> { attempts, makes, attempts2, attempts3 }
+  const cells = new Map(); // key `${ringIdx}:${wedgeIdx}` -> { attempts, makes }
 
   shots.forEach((shot) => {
     if (shot.x === undefined || shot.y === undefined) return;
@@ -507,11 +548,9 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
     const angle = Math.atan2(dx, dy);
     const wedgeIdx = wedgeIndexForAngle(angle);
     const key = `${ringIdx}:${wedgeIdx}`;
-    const cell = cells.get(key) || { attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
+    const cell = cells.get(key) || { attempts: 0, makes: 0 };
     cell.attempts += 1;
     if (isMake) cell.makes += 1;
-    if (shot.shotType === '3PT') cell.attempts3 += 1;
-    else cell.attempts2 += 1;
     cells.set(key, cell);
   });
 
@@ -519,21 +558,21 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'ring-overlay');
 
-  function colorAndTooltip(stat, shotType, label) {
+  function colorAndTooltip(stat, zone, label) {
     if (metric === 'attempts') {
       const value = stat.attempts && maxAttempts ? stat.attempts / maxAttempts : null;
-      return { fill: heatColorForRate(value), tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+      return { fill: heatColorForRate(value), tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
     }
     if (!stat.attempts || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) {
-      return { fill: NO_DATA_COLOR, tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+      return { fill: NO_DATA_COLOR, tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
     }
-    const baseline = (shotType === '3PT' ? baselines.threePct : baselines.twoPct) ?? 0;
+    const baseline = baselines.get(zone) ?? 0;
     const delta = stat.makes / stat.attempts - baseline;
-    return { fill: relativeColorForDelta(delta), tooltip: buildRingTooltip(label, stat, metric, shotType, baselines) };
+    return { fill: relativeColorForDelta(delta), tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
   }
 
   // Rim disc (unsplit)
-  const rimResult = colorAndTooltip(rim, '2PT', 'At the Rim (0-4.5ft)');
+  const rimResult = colorAndTooltip(rim, zoneForPoint(HOOP.x, HOOP.y), 'At the Rim (0-4.5ft)');
   const rimPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   rimPath.setAttribute('d', rimDiscPath());
   rimPath.setAttribute('fill', rimResult.fill);
@@ -559,10 +598,11 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
 
   for (let ringIdx = 0; ringIdx < RING_LABELS.length; ringIdx++) {
     for (let wedgeIdx = 0; wedgeIdx < WEDGE_LABELS.length; wedgeIdx++) {
-      const stat = cells.get(`${ringIdx}:${wedgeIdx}`) || { attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
-      const shotType = stat.attempts3 > stat.attempts2 ? '3PT' : '2PT';
+      const stat = cells.get(`${ringIdx}:${wedgeIdx}`) || { attempts: 0, makes: 0 };
       const label = `${RING_LABELS[ringIdx]} — ${WEDGE_LABELS[wedgeIdx]}`;
-      const result = colorAndTooltip(stat, shotType, label);
+      const pos = ringCellLabelPosition(ringIdx, wedgeIdx);
+      const zone = zoneForPoint(Math.min(COURT_WIDTH, Math.max(0, pos.x)), Math.min(COURT_HEIGHT, Math.max(0, pos.y)));
+      const result = colorAndTooltip(stat, zone, label);
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', ringCellPath(ringIdx, wedgeIdx));
@@ -573,7 +613,6 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = {}) {
       path.dataset.tooltip = result.tooltip;
       group.appendChild(path);
 
-      const pos = ringCellLabelPosition(ringIdx, wedgeIdx);
       const label2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       label2.setAttribute('x', pos.x);
       label2.setAttribute('y', pos.y);
@@ -678,20 +717,17 @@ function hexCorners(cx, cy, size) {
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
 // metric 'fgpct' colors each hex by its own make% (default); 'attempts' colors by
 // relative volume instead — hex size always tracks volume either way.
-// baselines: { twoPct, threePct } - see drawZoneOverlay. A bin's baseline is picked
-// by whichever shot type is more common in that bin (bins rarely straddle the 3PT
-// line given how small they are relative to the arc).
-export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
+// baselines: Map<zone, baseline%> from zoneBaselineMap() - a bin's baseline is picked
+// by classifying its center point via zoneForPoint(), same as Zones.
+export function drawHexbin(svg, shots, metric = 'fgpct', baselines = new Map()) {
   const bins = new Map();
   shots.forEach((shot) => {
     if (shot.x === undefined || shot.y === undefined) return;
     const { q, r } = pixelToHex(shot.x, shot.y, HEX_SIZE);
     const key = `${q},${r}`;
-    const bin = bins.get(key) || { q, r, attempts: 0, makes: 0, attempts2: 0, attempts3: 0 };
+    const bin = bins.get(key) || { q, r, attempts: 0, makes: 0 };
     bin.attempts += 1;
     if (shot.result === 'make') bin.makes += 1;
-    if (shot.shotType === '3PT') bin.attempts3 += 1;
-    else bin.attempts2 += 1;
     bins.set(key, bin);
   });
 
@@ -713,8 +749,9 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
     } else if (bin.attempts < MIN_ATTEMPTS_FOR_COLOR) {
       polygon.setAttribute('fill', NO_DATA_COLOR);
     } else {
-      const baseline = bin.attempts3 > bin.attempts2 ? baselines.threePct : baselines.twoPct;
-      const delta = bin.makes / bin.attempts - (baseline ?? 0);
+      const zone = zoneForPoint(Math.min(COURT_WIDTH, Math.max(0, center.x)), Math.min(COURT_HEIGHT, Math.max(0, center.y)));
+      const baseline = baselines.get(zone) ?? 0;
+      const delta = bin.makes / bin.attempts - baseline;
       polygon.setAttribute('fill', relativeColorForDelta(delta));
     }
     polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
@@ -786,12 +823,16 @@ function gaussianWeight(dx, dy, sigma) {
 }
 
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
-// baseline: his real overall FG% for the shots being charted (falls back to a generic
-// assumption if not given). This is the "neutral gray" anchor point - not just a fixed
-// 45%, so the color scale is honest about what "average" means for this specific dataset.
+// baseline: either a flat number (his real overall FG% for the shots being charted -
+// the "vs. his own average" mode, one neutral-gray anchor for the whole court) or a
+// function (x, y) => pct (the "vs. HS benchmark" mode via benchmarkAt(), which varies
+// by shot difficulty - a fixed 52% neutral point at the rim would be meaningless out
+// past the 3PT line). Falls back to a generic flat assumption if not given at all.
 export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
   const points = shots.filter((s) => s.x !== undefined && s.y !== undefined);
   if (!points.length) return;
+
+  const baselineAt = typeof baseline === 'function' ? baseline : () => baseline;
 
   const cells = [];
   for (let gx = 0; gx <= COURT_WIDTH; gx += HEAT_GRID_STEP) {
@@ -804,7 +845,7 @@ export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
         if (shot.result === 'make') madeWeight += w;
       }
       if (totalWeight > 0.05) {
-        cells.push({ gx, gy, pct: madeWeight / totalWeight, weight: totalWeight });
+        cells.push({ gx, gy, pct: madeWeight / totalWeight, weight: totalWeight, baseline: baselineAt(gx, gy) });
       }
     }
   }
@@ -816,8 +857,8 @@ export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
   // to reach some fixed, arbitrary "very good"/"very bad" threshold.
   const meaningfulCells = cells.filter((c) => c.weight >= HEAT_CONFIDENCE_WEIGHT * 0.4);
   const reference = meaningfulCells.length ? meaningfulCells : cells;
-  const maxAbove = Math.max(0.05, ...reference.map((c) => c.pct - baseline));
-  const maxBelow = Math.max(0.05, ...reference.map((c) => baseline - c.pct));
+  const maxAbove = Math.max(0.05, ...reference.map((c) => c.pct - c.baseline));
+  const maxBelow = Math.max(0.05, ...reference.map((c) => c.baseline - c.pct));
 
   const group = document.createElementNS(SVG_NS, 'g');
   group.setAttribute('id', 'heatmap');
@@ -828,7 +869,7 @@ export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
     rect.setAttribute('y', (cell.gy - HEAT_GRID_STEP / 2).toFixed(2));
     rect.setAttribute('width', HEAT_GRID_STEP);
     rect.setAttribute('height', HEAT_GRID_STEP);
-    rect.setAttribute('fill', divergingNormalized(cell.pct, baseline, maxAbove, maxBelow));
+    rect.setAttribute('fill', divergingNormalized(cell.pct, cell.baseline, maxAbove, maxBelow));
     // Capped below 1.0 so even a fully-confident area stays a wash rather than a solid
     // mask - keeps it reading as a heatmap over the court, not a poster on top of it.
     const confidence = Math.pow(cell.weight / HEAT_CONFIDENCE_WEIGHT, HEAT_OPACITY_CURVE);
