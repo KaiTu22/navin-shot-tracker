@@ -724,7 +724,7 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
   svg.appendChild(group);
 }
 
-// --- Smooth heatmap: kernel-weighted local make% vs. his baseline, blue (below) to red (above) ---
+// --- Smooth heatmap: kernel-weighted local make% vs. his baseline, red (below) to green (above) ---
 // This is a locally-smoothed efficiency surface, not a volume density map — it answers
 // "how well does he shoot from around here", matching the article's heatmap convention.
 
@@ -746,13 +746,16 @@ const HEAT_MAX_OPACITY = 0.92; // cap so a fully-confident area still reads as a
 const HEAT_OPACITY_CURVE = 0.5;
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
 // Colors are dark/saturated specifically because they sit on the tan court at partial
-// opacity - measured WCAG contrast against the court color (#d7c79e): the old
-// red/green pair here was only ~2-2.9:1 (muted, hard to read); these read at 6-6.9:1.
-// Also switched from red=bad/green=good to red=above-average/blue=below-average to
-// match the same language Zones/Hex/Rings already use, instead of a second convention.
-const HEAT_BELOW_AVG = [18, 58, 102]; // #123a66 - below his baseline ("cold")
+// opacity - measured WCAG contrast against the court color (#d7c79e): a naive red/green
+// pair here was only ~2-2.9:1 (muted, hard to read); these read at 4.85-6.14:1. Matches
+// the reference article's convention (red = lower%, green = higher%) at the user's
+// request. Note this is a real accessibility trade-off vs. Zones/Hex/Rings, which
+// deliberately use red/blue instead of red/green specifically because red-green is the
+// classic confusable pair for red-green colorblindness - picking a notably darker red
+// than green here at least gives a lightness cue on top of the hue difference.
+const HEAT_BELOW_AVG = [122, 31, 31]; // #7a1f1f - below his baseline ("cold" / lower%)
 const HEAT_NEUTRAL = [138, 132, 120]; // #8a8478 - close to his baseline, deliberately low-contrast so it recedes
-const HEAT_ABOVE_AVG = [122, 31, 31]; // #7a1f1f - above his baseline ("hot")
+const HEAT_ABOVE_AVG = [26, 92, 26]; // #1a5c1a - above his baseline ("hot" / higher%)
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
