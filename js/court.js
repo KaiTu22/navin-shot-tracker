@@ -714,6 +714,14 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = {}) {
 
 const HEAT_GRID_STEP = 1.5; // feet
 const HEAT_BANDWIDTH = 4.5; // feet, gaussian sigma
+// Opacity is confidence, scaled against this absolute amount of local kernel weight -
+// NOT against whatever the single densest spot on this particular chart achieves.
+// A tight, high-volume cluster (shots at the rim are almost always packed into a small
+// area) will always out-density a real, well-sampled but more spread-out area (e.g. the
+// 3PT arc) - normalizing to the chart's own max makes every non-rim zone look faint even
+// with plenty of real data behind it. This constant is calibrated so a cluster of roughly
+// 15 nearby attempts reaches full opacity, independent of what's happening elsewhere.
+const HEAT_CONFIDENCE_WEIGHT = 15;
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
 const HEAT_COLD = [208, 59, 59]; // --critical
 const HEAT_NEUTRAL = [56, 56, 53];
@@ -744,7 +752,6 @@ export function drawHeatmap(svg, shots) {
   if (!points.length) return;
 
   const cells = [];
-  let maxWeight = 0;
   for (let gx = 0; gx <= COURT_WIDTH; gx += HEAT_GRID_STEP) {
     for (let gy = 0; gy <= COURT_HEIGHT; gy += HEAT_GRID_STEP) {
       let totalWeight = 0;
@@ -756,7 +763,6 @@ export function drawHeatmap(svg, shots) {
       }
       if (totalWeight > 0.05) {
         cells.push({ gx, gy, pct: madeWeight / totalWeight, weight: totalWeight });
-        if (totalWeight > maxWeight) maxWeight = totalWeight;
       }
     }
   }
@@ -771,7 +777,7 @@ export function drawHeatmap(svg, shots) {
     rect.setAttribute('width', HEAT_GRID_STEP);
     rect.setAttribute('height', HEAT_GRID_STEP);
     rect.setAttribute('fill', diverging(cell.pct));
-    rect.setAttribute('opacity', Math.min(1, cell.weight / maxWeight).toFixed(2));
+    rect.setAttribute('opacity', Math.min(1, cell.weight / HEAT_CONFIDENCE_WEIGHT).toFixed(2));
     group.appendChild(rect);
   });
   svg.appendChild(group);
