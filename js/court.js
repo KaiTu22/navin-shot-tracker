@@ -165,17 +165,8 @@ function centerCirclePath() {
   return pathFromPoints(points);
 }
 
-export function drawCourt(svg) {
-  svg.setAttribute('viewBox', VIEW_BOX);
-  svg.innerHTML = `
-    <defs>
-      <filter id="heat-blur" x="-30%" y="-30%" width="160%" height="160%">
-        <feGaussianBlur stdDeviation="1" />
-      </filter>
-    </defs>
-
-    <rect x="${-PAD_X}" y="${-PAD_Y}" width="${COURT_WIDTH + 2 * PAD_X}" height="${COURT_HEIGHT + 2 * PAD_Y}" fill="#d7c79e" />
-
+function courtLinesMarkup() {
+  return `
     <path d="M 0 0 L ${COURT_WIDTH} 0" stroke="#f5f5f5" stroke-width="0.3" />
     <path d="M 0 0 L 0 ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
     <path d="M ${COURT_WIDTH} 0 L ${COURT_WIDTH} ${COURT_HEIGHT}" stroke="#f5f5f5" stroke-width="0.3" />
@@ -192,6 +183,31 @@ export function drawCourt(svg) {
 
     <path d="${threePointPath()}" fill="none" stroke="#f5f5f5" stroke-width="0.3" />
   `;
+}
+
+export function drawCourt(svg) {
+  svg.setAttribute('viewBox', VIEW_BOX);
+  svg.innerHTML = `
+    <defs>
+      <filter id="heat-blur" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="1" />
+      </filter>
+    </defs>
+
+    <rect x="${-PAD_X}" y="${-PAD_Y}" width="${COURT_WIDTH + 2 * PAD_X}" height="${COURT_HEIGHT + 2 * PAD_Y}" fill="#d7c79e" />
+
+    ${courtLinesMarkup()}
+  `;
+}
+
+// Redraws the court lines fresh, on top of whatever's already in the SVG. Used after
+// the (blurred, sometimes near-opaque) heatmap layer so the lines are never obscured
+// by it, regardless of how confident/solid the heat color underneath is.
+export function redrawCourtLinesOnTop(svg) {
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  group.setAttribute('id', 'court-lines-overlay');
+  group.innerHTML = courtLinesMarkup();
+  svg.appendChild(group);
 }
 
 // pct is 0-1 or null (no attempts). Dark-surface sequential ramp: low value recedes
@@ -722,6 +738,7 @@ const HEAT_BANDWIDTH = 4.5; // feet, gaussian sigma
 // with plenty of real data behind it. This constant is calibrated so a cluster of roughly
 // 15 nearby attempts reaches full opacity, independent of what's happening elsewhere.
 const HEAT_CONFIDENCE_WEIGHT = 15;
+const HEAT_MAX_OPACITY = 0.82; // cap so a fully-confident area still reads as a wash, not a solid mask
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
 const HEAT_COLD = [208, 59, 59]; // --critical
 const HEAT_NEUTRAL = [56, 56, 53];
@@ -777,8 +794,11 @@ export function drawHeatmap(svg, shots) {
     rect.setAttribute('width', HEAT_GRID_STEP);
     rect.setAttribute('height', HEAT_GRID_STEP);
     rect.setAttribute('fill', diverging(cell.pct));
-    rect.setAttribute('opacity', Math.min(1, cell.weight / HEAT_CONFIDENCE_WEIGHT).toFixed(2));
+    // Capped below 1.0 so even a fully-confident area stays a wash rather than a solid
+    // mask - keeps it reading as a heatmap over the court, not a poster on top of it.
+    rect.setAttribute('opacity', Math.min(HEAT_MAX_OPACITY, cell.weight / HEAT_CONFIDENCE_WEIGHT).toFixed(2));
     group.appendChild(rect);
   });
   svg.appendChild(group);
+  redrawCourtLinesOnTop(svg);
 }
