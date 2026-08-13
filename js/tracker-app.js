@@ -30,6 +30,7 @@ import {
 } from './render.js';
 import { installPressFeedback } from './ui-feedback.js';
 import { installZoneTooltip } from './zone-tooltip.js';
+import { seedSampleGames, deleteSampleGames } from './seed-sample-data.js';
 
 const SCOPE_KEY = 'shot-tracker-scope-id';
 
@@ -63,6 +64,12 @@ function updateMetricHint(hintId, mode, metric) {
 installPressFeedback();
 installZoneTooltip(el('summary-court').closest('.panel'), el('summary-court'));
 installZoneTooltip(el('insights-court').closest('.panel'), el('insights-court'));
+
+// Console-only dev helpers for generating/removing a large synthetic season so the
+// shot charts can be evaluated at real volume. Not wired to any UI button - run
+// seedSampleGames() / deleteSampleGames() from the browser console after signing in.
+window.seedSampleGames = (count) => seedSampleGames(state.scopeId, count);
+window.deleteSampleGames = () => deleteSampleGames(state.scopeId, state.games);
 
 function showScreen(name) {
   screens.forEach((s) => el(`screen-${s}`).classList.toggle('hidden', s !== name));
