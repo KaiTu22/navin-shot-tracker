@@ -10,7 +10,7 @@ import {
   drawHeatmap,
   drawRingOverlay,
   zoneBaselineMap,
-  benchmarkAt,
+  smoothedBenchmarkAt,
   ZONES
 } from './court.js';
 
@@ -77,7 +77,7 @@ export function renderShotChart(svgEl, events, mode, metric = 'fgpct', baselineM
     drawRingOverlay(svgEl, events.filter((e) => e.type === 'shot'), metric, baselines, baselineMode);
   } else if (mode === 'heat') {
     const { overallPct } = getShotSummary(events);
-    const baseline = baselineMode === 'benchmark' ? benchmarkAt : overallPct;
+    const baseline = baselineMode === 'benchmark' ? smoothedBenchmarkAt : overallPct;
     drawHeatmap(svgEl, events.filter((e) => e.type === 'shot'), baseline);
   } else {
     drawShots(svgEl, events.filter((e) => e.type === 'shot'));

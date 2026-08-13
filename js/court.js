@@ -822,12 +822,37 @@ function gaussianWeight(dx, dy, sigma) {
   return Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
 }
 
+// benchmarkAt() is a step function - it jumps sharply right at a zone boundary (52.5%
+// at the rim vs. 32.5% a few inches away in the paint). Heat's actual color surface has
+// no such edges - it's a smooth gaussian-kernel blend across every nearby shot. Comparing
+// a smooth surface to a stepped one creates a fake-looking hard edge in the color right
+// at the boundary (e.g. a "cold" ring around the rim that isn't really there). This
+// blends benchmarkAt with the same kernel/bandwidth used for the shot density above, so
+// the benchmark itself transitions gradually near zone boundaries instead of jumping.
+const BENCHMARK_SMOOTH_STEP = 0.75; // feet, sub-sampling resolution for the blur convolution
+const BENCHMARK_SMOOTH_RANGE = HEAT_BANDWIDTH * 2; // feet - beyond this the gaussian weight is negligible
+export function smoothedBenchmarkAt(x, y) {
+  let totalWeight = 0;
+  let weightedSum = 0;
+  for (let dx = -BENCHMARK_SMOOTH_RANGE; dx <= BENCHMARK_SMOOTH_RANGE; dx += BENCHMARK_SMOOTH_STEP) {
+    for (let dy = -BENCHMARK_SMOOTH_RANGE; dy <= BENCHMARK_SMOOTH_RANGE; dy += BENCHMARK_SMOOTH_STEP) {
+      const sx = x + dx;
+      const sy = y + dy;
+      if (sx < 0 || sx > COURT_WIDTH || sy < 0 || sy > COURT_HEIGHT) continue;
+      const w = gaussianWeight(dx, dy, HEAT_BANDWIDTH);
+      weightedSum += w * benchmarkAt(sx, sy);
+      totalWeight += w;
+    }
+  }
+  return totalWeight > 0 ? weightedSum / totalWeight : benchmarkAt(x, y);
+}
+
 // shots: array of { x, y, result } for made/missed field goal attempts only (no free throws).
 // baseline: either a flat number (his real overall FG% for the shots being charted -
 // the "vs. his own average" mode, one neutral-gray anchor for the whole court) or a
-// function (x, y) => pct (the "vs. HS benchmark" mode via benchmarkAt(), which varies
-// by shot difficulty - a fixed 52% neutral point at the rim would be meaningless out
-// past the 3PT line). Falls back to a generic flat assumption if not given at all.
+// function (x, y) => pct (the "vs. HS benchmark" mode via smoothedBenchmarkAt(), which
+// varies by shot difficulty - a fixed 52% neutral point at the rim would be meaningless
+// out past the 3PT line). Falls back to a generic flat assumption if not given at all.
 export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
   const points = shots.filter((s) => s.x !== undefined && s.y !== undefined);
   if (!points.length) return;
