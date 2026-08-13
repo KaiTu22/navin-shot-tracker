@@ -253,25 +253,48 @@ export function heatColorForRate(pct) {
 }
 
 // A spot's raw FG% doesn't account for shot difficulty (35% from three is great,
-// 35% at the rim isn't) - relativeColor instead compares a zone/hex's make% to the
-// player's OWN baseline for that shot type (his overall 2PT% or 3PT%, from the same
-// dataset being viewed), the same "vs. average" technique real shot-chart tools use.
-// Red = shooting above his own average from there ("hot"), blue = below ("cold") -
-// two shades per side by lightness (not a red<->green hue crossing) for CVD safety.
+// 35% at the rim isn't) - color instead compares a zone/hex/ring cell's make% to a
+// baseline (his own average, or an HS benchmark - see zoneBaselineMap/benchmarkAt),
+// the same "vs. average" technique real shot-chart tools use. Same diverging red
+// (below)/green (above) scale as Heat (see normalizedDivergingColor), stretched to
+// whatever spread is actually present in the current dataset, so every chart on the
+// app reads the same way.
 export const MIN_ATTEMPTS_FOR_COLOR = 2; // fewer attempts than this = not enough data to color meaningfully
 const NO_DATA_COLOR = 'rgba(255,255,255,0.04)';
-const NEUTRAL_COLOR = '#383835';
-const RED_MILD = '#e66767';
-const RED_STRONG = '#d03b3b';
-const BLUE_MILD = '#5598e7';
-const BLUE_STRONG = '#184f95';
 
-export function relativeColorForDelta(delta) {
-  if (delta === null || delta === undefined) return NO_DATA_COLOR;
-  const magnitude = Math.abs(delta);
-  if (magnitude < 0.08) return NEUTRAL_COLOR;
-  if (delta > 0) return magnitude >= 0.18 ? RED_STRONG : RED_MILD;
-  return magnitude >= 0.18 ? BLUE_STRONG : BLUE_MILD;
+// Colors are dark/saturated specifically because they sit on the tan court at partial
+// opacity - measured WCAG contrast against the court color (#d7c79e): a naive red/green
+// pair here was only ~2-2.9:1 (muted, hard to read); these read at 4.85-6.14:1. Picking a
+// notably darker red than green gives a lightness cue on top of the hue difference, since
+// red-green is otherwise the classic confusable pair for red-green colorblindness.
+const DIVERGING_BELOW = [122, 31, 31]; // #7a1f1f - below baseline ("cold" / lower%)
+const DIVERGING_NEUTRAL = [138, 132, 120]; // #8a8478 - close to baseline, deliberately low-contrast so it recedes
+const DIVERGING_ABOVE = [26, 92, 26]; // #1a5c1a - above baseline ("hot" / higher%)
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function blendColor(c1, c2, t) {
+  const r = Math.round(lerp(c1[0], c2[0], t));
+  const g = Math.round(lerp(c1[1], c2[1], t));
+  const b = Math.round(lerp(c1[2], c2[2], t));
+  return `rgb(${r},${g},${b})`;
+}
+
+// Stretches color to the range actually observed in THIS dataset (maxAbove/maxBelow),
+// rather than a fixed assumed spread - a small or naturally tight-spread dataset still
+// gets a fully-saturated hot and cold spot instead of everything landing close to gray
+// just because nothing happens to clear some fixed, arbitrary "very good"/"very bad"
+// threshold.
+export function normalizedDivergingColor(value, baseline, maxAbove, maxBelow) {
+  if (value === null || value === undefined) return NO_DATA_COLOR;
+  if (value >= baseline) {
+    const t = Math.min(1, (value - baseline) / maxAbove);
+    return blendColor(DIVERGING_NEUTRAL, DIVERGING_ABOVE, t);
+  }
+  const t = Math.min(1, (baseline - value) / maxBelow);
+  return blendColor(DIVERGING_NEUTRAL, DIVERGING_BELOW, t);
 }
 
 // Shapes trace the true arc/tangent boundary exactly (sampled by angle, never by
@@ -408,6 +431,21 @@ function buildZoneTooltip(zone, stat, metric, baselines, baselineMode) {
 // 'fgpct' metric mode.
 export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = new Map(), baselineMode = 'self') {
   const maxAttempts = Math.max(0, ...[...zoneStats.values()].map((s) => s.attempts));
+
+  // Stretch color to the range of above/below-baseline deltas actually present among
+  // zones with enough data (see normalizedDivergingColor) instead of a fixed spread.
+  let maxAbove = 0.05;
+  let maxBelow = 0.05;
+  if (metric === 'fgpct') {
+    ZONES.forEach((zone) => {
+      const stat = zoneStats.get(zone);
+      if (!stat || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) return;
+      const delta = stat.makes / stat.attempts - (baselines.get(zone) ?? 0);
+      if (delta > 0) maxAbove = Math.max(maxAbove, delta);
+      else maxBelow = Math.max(maxBelow, -delta);
+    });
+  }
+
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'zone-overlay');
   ZONES.forEach((zone) => {
@@ -427,8 +465,8 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = ne
       hasColor = false;
     } else {
       const baseline = baselines.get(zone) ?? 0;
-      const delta = stat.makes / stat.attempts - baseline;
-      path.setAttribute('fill', relativeColorForDelta(delta));
+      const rate = stat.makes / stat.attempts;
+      path.setAttribute('fill', normalizedDivergingColor(rate, baseline, maxAbove, maxBelow));
       path.setAttribute('fill-opacity', '0.82');
     }
     path.setAttribute('stroke', 'rgba(255,255,255,0.35)');
@@ -450,7 +488,7 @@ export function drawZoneOverlay(svg, zoneStats, metric = 'fgpct', baselines = ne
     label.setAttribute('stroke', 'rgba(0,0,0,0.55)');
     label.setAttribute('stroke-width', '0.4');
     label.style.pointerEvents = 'none';
-    label.textContent = stat && stat.attempts ? `${Math.round((stat.makes / stat.attempts) * 100)}%` : '—';
+    label.textContent = !stat || !stat.attempts ? '—' : metric === 'attempts' ? `${stat.attempts}` : `${Math.round((stat.makes / stat.attempts) * 100)}%`;
     group.appendChild(label);
   });
   svg.appendChild(group);
@@ -558,6 +596,28 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.setAttribute('id', 'ring-overlay');
 
+  // Stretch color to the range of above/below-baseline deltas actually present among
+  // cells with enough data (see normalizedDivergingColor) instead of a fixed spread.
+  let maxAbove = 0.05;
+  let maxBelow = 0.05;
+  if (metric === 'fgpct') {
+    const trackDelta = (stat, zone) => {
+      if (!stat.attempts || stat.attempts < MIN_ATTEMPTS_FOR_COLOR) return;
+      const delta = stat.makes / stat.attempts - (baselines.get(zone) ?? 0);
+      if (delta > 0) maxAbove = Math.max(maxAbove, delta);
+      else maxBelow = Math.max(maxBelow, -delta);
+    };
+    trackDelta(rim, zoneForPoint(HOOP.x, HOOP.y));
+    for (let ringIdx = 0; ringIdx < RING_LABELS.length; ringIdx++) {
+      for (let wedgeIdx = 0; wedgeIdx < WEDGE_LABELS.length; wedgeIdx++) {
+        const stat = cells.get(`${ringIdx}:${wedgeIdx}`) || { attempts: 0, makes: 0 };
+        const pos = ringCellLabelPosition(ringIdx, wedgeIdx);
+        const zone = zoneForPoint(Math.min(COURT_WIDTH, Math.max(0, pos.x)), Math.min(COURT_HEIGHT, Math.max(0, pos.y)));
+        trackDelta(stat, zone);
+      }
+    }
+  }
+
   function colorAndTooltip(stat, zone, label) {
     if (metric === 'attempts') {
       const value = stat.attempts && maxAttempts ? stat.attempts / maxAttempts : null;
@@ -567,8 +627,8 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
       return { fill: NO_DATA_COLOR, tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
     }
     const baseline = baselines.get(zone) ?? 0;
-    const delta = stat.makes / stat.attempts - baseline;
-    return { fill: relativeColorForDelta(delta), tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
+    const rate = stat.makes / stat.attempts;
+    return { fill: normalizedDivergingColor(rate, baseline, maxAbove, maxBelow), tooltip: buildRingTooltip(label, stat, metric, zone, baselines, baselineMode) };
   }
 
   // Rim disc (unsplit)
@@ -593,7 +653,7 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
   rimLabel.setAttribute('stroke', 'rgba(0,0,0,0.55)');
   rimLabel.setAttribute('stroke-width', '0.4');
   rimLabel.style.pointerEvents = 'none';
-  rimLabel.textContent = rim.attempts ? `${Math.round((rim.makes / rim.attempts) * 100)}%` : '—';
+  rimLabel.textContent = !rim.attempts ? '—' : metric === 'attempts' ? `${rim.attempts}` : `${Math.round((rim.makes / rim.attempts) * 100)}%`;
   group.appendChild(rimLabel);
 
   for (let ringIdx = 0; ringIdx < RING_LABELS.length; ringIdx++) {
@@ -625,7 +685,7 @@ export function drawRingOverlay(svg, shots, metric = 'fgpct', baselines = new Ma
       label2.setAttribute('stroke', 'rgba(0,0,0,0.55)');
       label2.setAttribute('stroke-width', '0.28');
       label2.style.pointerEvents = 'none';
-      label2.textContent = stat.attempts ? `${Math.round((stat.makes / stat.attempts) * 100)}%` : '—';
+      label2.textContent = !stat.attempts ? '—' : metric === 'attempts' ? `${stat.attempts}` : `${Math.round((stat.makes / stat.attempts) * 100)}%`;
       group.appendChild(label2);
     }
   }
@@ -734,6 +794,21 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = new Map()) 
   if (!bins.size) return;
   const maxAttempts = Math.max(...[...bins.values()].map((b) => b.attempts));
 
+  // Stretch color to the range of above/below-baseline deltas actually present among
+  // bins with enough data (see normalizedDivergingColor) instead of a fixed spread.
+  let maxAbove = 0.05;
+  let maxBelow = 0.05;
+  if (metric === 'fgpct') {
+    bins.forEach((bin) => {
+      if (bin.attempts < MIN_ATTEMPTS_FOR_COLOR) return;
+      const center = hexToPixel(bin.q, bin.r, HEX_SIZE);
+      const zone = zoneForPoint(Math.min(COURT_WIDTH, Math.max(0, center.x)), Math.min(COURT_HEIGHT, Math.max(0, center.y)));
+      const delta = bin.makes / bin.attempts - (baselines.get(zone) ?? 0);
+      if (delta > 0) maxAbove = Math.max(maxAbove, delta);
+      else maxBelow = Math.max(maxBelow, -delta);
+    });
+  }
+
   const group = document.createElementNS(SVG_NS, 'g');
   group.setAttribute('id', 'hexbin');
   bins.forEach((bin) => {
@@ -751,8 +826,8 @@ export function drawHexbin(svg, shots, metric = 'fgpct', baselines = new Map()) 
     } else {
       const zone = zoneForPoint(Math.min(COURT_WIDTH, Math.max(0, center.x)), Math.min(COURT_HEIGHT, Math.max(0, center.y)));
       const baseline = baselines.get(zone) ?? 0;
-      const delta = bin.makes / bin.attempts - baseline;
-      polygon.setAttribute('fill', relativeColorForDelta(delta));
+      const rate = bin.makes / bin.attempts;
+      polygon.setAttribute('fill', normalizedDivergingColor(rate, baseline, maxAbove, maxBelow));
     }
     polygon.setAttribute('stroke', 'rgba(255,255,255,0.4)');
     polygon.setAttribute('stroke-width', '0.1');
@@ -782,41 +857,8 @@ const HEAT_MAX_OPACITY = 0.92; // cap so a fully-confident area still reads as a
 // look like anything at all.
 const HEAT_OPACITY_CURVE = 0.5;
 const HEAT_MIDPOINT = 0.45; // roughly a typical HS FG% - the neutral gray point
-// Colors are dark/saturated specifically because they sit on the tan court at partial
-// opacity - measured WCAG contrast against the court color (#d7c79e): a naive red/green
-// pair here was only ~2-2.9:1 (muted, hard to read); these read at 4.85-6.14:1. Matches
-// the reference article's convention (red = lower%, green = higher%) at the user's
-// request. Note this is a real accessibility trade-off vs. Zones/Hex/Rings, which
-// deliberately use red/blue instead of red/green specifically because red-green is the
-// classic confusable pair for red-green colorblindness - picking a notably darker red
-// than green here at least gives a lightness cue on top of the hue difference.
-const HEAT_BELOW_AVG = [122, 31, 31]; // #7a1f1f - below his baseline ("cold" / lower%)
-const HEAT_NEUTRAL = [138, 132, 120]; // #8a8478 - close to his baseline, deliberately low-contrast so it recedes
-const HEAT_ABOVE_AVG = [26, 92, 26]; // #1a5c1a - above his baseline ("hot" / higher%)
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-function blend(c1, c2, t) {
-  const r = Math.round(lerp(c1[0], c2[0], t));
-  const g = Math.round(lerp(c1[1], c2[1], t));
-  const b = Math.round(lerp(c1[2], c2[2], t));
-  return `rgb(${r},${g},${b})`;
-}
-
-// Stretches color to the range actually observed in THIS data (maxAbove/maxBelow),
-// rather than a fixed assumed spread - see the call site in drawHeatmap for why: a
-// small or naturally tight-spread dataset still gets a fully-saturated hot and cold
-// spot instead of everything landing close to neutral gray.
-function divergingNormalized(pct, baseline, maxAbove, maxBelow) {
-  if (pct >= baseline) {
-    const t = Math.min(1, (pct - baseline) / maxAbove);
-    return blend(HEAT_NEUTRAL, HEAT_ABOVE_AVG, t);
-  }
-  const t = Math.min(1, (baseline - pct) / maxBelow);
-  return blend(HEAT_NEUTRAL, HEAT_BELOW_AVG, t);
-}
+// Color is the same shared diverging red (below)/green (above) scale defined above
+// (normalizedDivergingColor) - see that function for the contrast/CVD rationale.
 
 function gaussianWeight(dx, dy, sigma) {
   return Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
@@ -894,7 +936,7 @@ export function drawHeatmap(svg, shots, baseline = HEAT_MIDPOINT) {
     rect.setAttribute('y', (cell.gy - HEAT_GRID_STEP / 2).toFixed(2));
     rect.setAttribute('width', HEAT_GRID_STEP);
     rect.setAttribute('height', HEAT_GRID_STEP);
-    rect.setAttribute('fill', divergingNormalized(cell.pct, cell.baseline, maxAbove, maxBelow));
+    rect.setAttribute('fill', normalizedDivergingColor(cell.pct, cell.baseline, maxAbove, maxBelow));
     // Capped below 1.0 so even a fully-confident area stays a wash rather than a solid
     // mask - keeps it reading as a heatmap over the court, not a poster on top of it.
     const confidence = Math.pow(cell.weight / HEAT_CONFIDENCE_WEIGHT, HEAT_OPACITY_CURVE);
