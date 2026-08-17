@@ -20,6 +20,7 @@ const NAV_VISIBLE_SCREENS = ['games', 'insights'];
 const state = {
   games: [],
   selectedGameId: null,
+  collapsedCategories: new Set(),
   chartMode: 'scatter',
   chartMetric: 'fgpct',
   chartBaseline: 'self',
@@ -76,12 +77,20 @@ if (!scopeId) {
 }
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: false });
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: false }, state.collapsedCategories);
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
   if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
 }
 
 el('game-list').addEventListener('click', (event) => {
+  const categoryHeader = event.target.closest('[data-toggle-category]');
+  if (categoryHeader) {
+    const category = categoryHeader.dataset.toggleCategory;
+    if (state.collapsedCategories.has(category)) state.collapsedCategories.delete(category);
+    else state.collapsedCategories.add(category);
+    renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: false }, state.collapsedCategories);
+    return;
+  }
   const selectBtn = event.target.closest('[data-select-id]');
   if (!selectBtn) return;
   state.selectedGameId = selectBtn.dataset.selectId;

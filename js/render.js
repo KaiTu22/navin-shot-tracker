@@ -1,6 +1,6 @@
 // Shared render helpers used by both the tracker app and the read-only player app,
 // so the two views never drift out of sync on how a stat is computed or displayed.
-import { getShotSummary, getCountStats, getZoneStats } from './data-store.js';
+import { getShotSummary, getCountStats, getZoneStats, GAME_CATEGORIES } from './data-store.js';
 import {
   drawCourt,
   drawShots,
@@ -151,35 +151,71 @@ export function renderTrend(container, games, selectedGameId) {
   container.innerHTML = rows.join('') + bestLine;
 }
 
-export function renderGameList(container, games, selectedGameId, { canManage = false } = {}) {
+function gameItemMarkup(game, selectedGameId, canManage) {
+  const active = game.id === selectedGameId ? 'active' : '';
+  const shotCount = (game.events || []).filter((e) => e.type === 'shot' || e.type === 'freeThrow').length;
+  const statusBadge = game.status === 'live' ? '<span class="game-item__badge">Live</span>' : '';
+  const resumeBtn =
+    canManage && game.status !== 'live'
+      ? `<button type="button" class="game-item__resume" data-resume-id="${game.id}">Resume</button>`
+      : '';
+  const deleteBtn = canManage
+    ? `<button type="button" class="game-item__delete" data-delete-id="${game.id}" aria-label="Delete ${game.name}">Delete</button>`
+    : '';
+  return `
+    <div class="game-item ${active}">
+      <button type="button" class="game-item__main" data-select-id="${game.id}">
+        <span class="game-item__title">${game.name}</span>
+        <span class="game-item__meta">${game.opponent ? `vs ${game.opponent} • ` : ''}${formatDate(game.date)}</span>
+      </button>
+      <span class="game-item__side">
+        ${statusBadge}
+        <span class="game-item__chip">${shotCount}</span>
+        ${resumeBtn}
+        ${deleteBtn}
+      </span>
+    </div>
+  `;
+}
+
+// Groups games into the fixed GAME_CATEGORIES buckets (plus "Uncategorized" for
+// older/migrated games with no category), each collapsible independently so a season's
+// worth of games doesn't read as one long flat list. collapsedCategories: Set of bucket
+// names currently collapsed (persisted in the caller's state, not here).
+export function renderGameList(container, games, selectedGameId, { canManage = false } = {}, collapsedCategories = new Set()) {
   if (!games.length) {
     container.innerHTML = '<div class="empty-state">No games yet.</div>';
     return;
   }
-  container.innerHTML = games
-    .map((game) => {
-      const active = game.id === selectedGameId ? 'active' : '';
-      const shotCount = (game.events || []).filter((e) => e.type === 'shot' || e.type === 'freeThrow').length;
-      const statusBadge = game.status === 'live' ? '<span class="game-item__badge">Live</span>' : '';
-      const resumeBtn =
-        canManage && game.status !== 'live'
-          ? `<button type="button" class="game-item__resume" data-resume-id="${game.id}">Resume</button>`
-          : '';
-      const deleteBtn = canManage
-        ? `<button type="button" class="game-item__delete" data-delete-id="${game.id}" aria-label="Delete ${game.name}">Delete</button>`
-        : '';
+
+  const buckets = new Map(GAME_CATEGORIES.map((category) => [category, []]));
+  const uncategorized = [];
+  games.forEach((game) => {
+    if (game.category && buckets.has(game.category)) buckets.get(game.category).push(game);
+    else uncategorized.push(game);
+  });
+
+  const sections = [...GAME_CATEGORIES];
+  if (uncategorized.length) {
+    buckets.set('Uncategorized', uncategorized);
+    sections.push('Uncategorized');
+  }
+
+  container.innerHTML = sections
+    .map((category) => {
+      const categoryGames = buckets.get(category) || [];
+      const collapsed = collapsedCategories.has(category);
+      const body = categoryGames.length
+        ? categoryGames.map((game) => gameItemMarkup(game, selectedGameId, canManage)).join('')
+        : '<div class="empty-state empty-state--small">No games in this category yet.</div>';
       return `
-        <div class="game-item ${active}">
-          <button type="button" class="game-item__main" data-select-id="${game.id}">
-            <span class="game-item__title">${game.name}</span>
-            <span class="game-item__meta">${game.opponent ? `vs ${game.opponent} • ` : ''}${formatDate(game.date)}</span>
+        <div class="game-category">
+          <button type="button" class="game-category__header" data-toggle-category="${category}">
+            <span class="game-category__name">${category}</span>
+            <span class="game-category__count">${categoryGames.length}</span>
+            <span class="game-category__chevron ${collapsed ? 'collapsed' : ''}">&#9662;</span>
           </button>
-          <span class="game-item__side">
-            ${statusBadge}
-            <span class="game-item__chip">${shotCount}</span>
-            ${resumeBtn}
-            ${deleteBtn}
-          </span>
+          <div class="game-category__body ${collapsed ? 'hidden' : ''}">${body}</div>
         </div>
       `;
     })

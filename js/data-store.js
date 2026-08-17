@@ -27,6 +27,11 @@ const db = getFirestore(app);
 
 export const PLAYER_NAME = 'Navin';
 
+// Fixed set of buckets the Games list is organized into (see renderGameList). A game
+// without a category (older data, or migrated games) falls into a separate
+// "Uncategorized" bucket that's handled in render.js rather than listed here.
+export const GAME_CATEGORIES = ['AAU', 'School League', 'Pre-Season', 'Season', 'Playoffs'];
+
 // One tracker account -> one fixed scope, so any browser/device you sign into
 // resolves to the same games (previously this was a random id stored in that
 // browser's localStorage, which meant a new browser saw an empty Games list).
@@ -70,6 +75,7 @@ function normalizeGame(id, data) {
     opponent: data.opponent || '',
     venue: data.venue || '',
     league: data.league || '',
+    category: data.category || '',
     date: data.date || '',
     time: data.time || '',
     periodMode: data.periodMode || 'full',
@@ -85,6 +91,7 @@ export function createGame(scopeId, meta) {
     opponent: meta.opponent || '',
     venue: meta.venue || '',
     league: meta.league || '',
+    category: meta.category || '',
     date: meta.date || '',
     time: meta.time || '',
     periodMode: meta.periodMode || 'full',

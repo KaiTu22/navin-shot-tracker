@@ -4,7 +4,7 @@
 // (window.seedSampleGames() / window.deleteSampleGames()) so it's never one accidental
 // tap away from polluting real data. Every seeded game is named "[SAMPLE] ..." so
 // cleanup is unambiguous.
-import { createGame, updateGameMeta, appendEvent, logShot, deleteGame } from './data-store.js';
+import { createGame, updateGameMeta, appendEvent, logShot, deleteGame, GAME_CATEGORIES } from './data-store.js';
 import { classifyShot } from './court.js';
 
 const OPPONENTS = ['Central', 'Lincoln', 'Riverside', 'Eastview', 'Franklin', 'Jefferson', 'Madison', 'Wilson', 'Roosevelt', 'Hamilton'];
@@ -87,6 +87,7 @@ export async function seedSampleGames(scopeId, gameCount = 20) {
       opponent,
       venue: i % 2 === 0 ? 'Home Gym' : `${opponent} Gym`,
       league: 'Sample Season',
+      category: GAME_CATEGORIES[i % GAME_CATEGORIES.length],
       date: randomPastDate(120),
       time: '',
       periodMode: 'quarters'

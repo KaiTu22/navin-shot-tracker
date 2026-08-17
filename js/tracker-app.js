@@ -44,6 +44,8 @@ const state = {
   selectedGameId: null,
   pendingShot: null,
   periodMode: 'full',
+  category: 'Season',
+  collapsedCategories: new Set(),
   chartMode: 'scatter',
   chartMetric: 'fgpct',
   chartBaseline: 'self',
@@ -163,7 +165,7 @@ el('sign-out-btn').addEventListener('click', () => signOutTracker());
 // --- Games updates drive whichever screen is visible ---
 
 function onGamesUpdated() {
-  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: true });
+  renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: true }, state.collapsedCategories);
   if (!el('screen-live').classList.contains('hidden')) renderLiveScreen();
   if (!el('screen-summary').classList.contains('hidden')) renderSummaryScreen();
   if (!el('screen-insights').classList.contains('hidden')) renderInsightsScreen();
@@ -183,6 +185,14 @@ function openGame(game) {
 }
 
 el('game-list').addEventListener('click', (event) => {
+  const categoryHeader = event.target.closest('[data-toggle-category]');
+  if (categoryHeader) {
+    const category = categoryHeader.dataset.toggleCategory;
+    if (state.collapsedCategories.has(category)) state.collapsedCategories.delete(category);
+    else state.collapsedCategories.add(category);
+    renderGameList(el('game-list'), state.games, state.selectedGameId, { canManage: true }, state.collapsedCategories);
+    return;
+  }
   const deleteBtn = event.target.closest('[data-delete-id]');
   if (deleteBtn) {
     const game = state.games.find((g) => g.id === deleteBtn.dataset.deleteId);
@@ -254,12 +264,20 @@ document.querySelectorAll('#period-mode-group button').forEach((btn) => {
   });
 });
 
+document.querySelectorAll('#category-group button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.category = btn.dataset.category;
+    document.querySelectorAll('#category-group button').forEach((b) => b.classList.toggle('active', b === btn));
+  });
+});
+
 el('start-tracking-btn').addEventListener('click', async () => {
   const meta = {
     name: `Game ${state.games.length + 1}`,
     opponent: el('ng-opponent').value.trim(),
     venue: el('ng-venue').value.trim(),
     league: el('ng-league').value.trim(),
+    category: state.category,
     date: el('ng-date').value,
     time: el('ng-time').value,
     periodMode: state.periodMode

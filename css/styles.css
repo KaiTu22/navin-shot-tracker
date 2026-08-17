@@ -137,6 +137,27 @@ button.pressed { transform: scale(0.94); opacity: 0.8; }
   padding: 20px; border-radius: 14px; background: rgba(255,255,255,0.02);
   border: 1px dashed var(--line); color: var(--muted); text-align: center;
 }
+.empty-state--small { padding: 12px; font-size: 0.82rem; }
+
+/* --- Game category buckets (collapsible) --- */
+.game-category { margin-bottom: 14px; }
+.game-category:last-child { margin-bottom: 0; }
+.game-category__header {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; color: var(--text); margin-bottom: 10px;
+}
+.game-category__name {
+  flex: 1; text-align: left; font-weight: 800; font-size: 0.8rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--soft-muted);
+}
+.game-category__count {
+  background: rgba(255,255,255,0.08); border-radius: 999px; padding: 3px 10px; font-size: 0.74rem; font-weight: 700;
+}
+.game-category__chevron { display: inline-block; font-size: 0.85rem; color: var(--soft-muted); transition: transform 0.15s ease; }
+.game-category__chevron.collapsed { transform: rotate(-90deg); }
+.game-category__body { display: flex; flex-direction: column; gap: 10px; }
+.game-category__body.hidden { display: none; }
 
 /* --- New game form --- */
 .form-field { display: grid; gap: 6px; padding: 12px 4px; border-bottom: 1px solid var(--line); }
@@ -155,6 +176,7 @@ button.pressed { transform: scale(0.94); opacity: 0.8; }
 }
 .roster-row span.roster-name { flex: 1; font-weight: 700; }
 .segmented-choice { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.segmented-choice--categories { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .segmented-choice button {
   border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,0.02);
   color: var(--text); padding: 12px 6px; font-weight: 700; font-size: 0.92rem;
