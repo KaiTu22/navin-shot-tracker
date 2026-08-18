@@ -159,6 +159,9 @@ function gameItemMarkup(game, selectedGameId, canManage) {
     canManage && game.status !== 'live'
       ? `<button type="button" class="game-item__resume" data-resume-id="${game.id}">Resume</button>`
       : '';
+  const editBtn = canManage
+    ? `<button type="button" class="game-item__edit" data-edit-id="${game.id}" aria-label="Edit ${game.name}">Edit</button>`
+    : '';
   const deleteBtn = canManage
     ? `<button type="button" class="game-item__delete" data-delete-id="${game.id}" aria-label="Delete ${game.name}">Delete</button>`
     : '';
@@ -172,6 +175,7 @@ function gameItemMarkup(game, selectedGameId, canManage) {
         ${statusBadge}
         <span class="game-item__chip">${shotCount}</span>
         ${resumeBtn}
+        ${editBtn}
         ${deleteBtn}
       </span>
     </div>

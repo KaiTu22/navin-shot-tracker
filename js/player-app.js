@@ -1,4 +1,4 @@
-import { PLAYER_NAME, subscribeToGames, getShotSummary } from './data-store.js';
+import { PLAYER_NAME, subscribeToGames, getShotSummary, GAME_CATEGORIES } from './data-store.js';
 import {
   renderShotChart,
   renderZoneCards,
@@ -20,7 +20,7 @@ const NAV_VISIBLE_SCREENS = ['games', 'insights'];
 const state = {
   games: [],
   selectedGameId: null,
-  collapsedCategories: new Set(),
+  collapsedCategories: new Set([...GAME_CATEGORIES, 'Uncategorized']),
   chartMode: 'scatter',
   chartMetric: 'fgpct',
   chartBaseline: 'self',

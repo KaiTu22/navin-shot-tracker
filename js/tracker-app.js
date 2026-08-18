@@ -14,7 +14,8 @@ import {
   undoLastEvent,
   endPeriod,
   getShotSummary,
-  getCountStats
+  getCountStats,
+  GAME_CATEGORIES
 } from './data-store.js';
 import { classifyShot, pointFromEvent, drawPendingMarker, removePendingMarker } from './court.js';
 import {
@@ -45,7 +46,8 @@ const state = {
   pendingShot: null,
   periodMode: 'full',
   category: 'Season',
-  collapsedCategories: new Set(),
+  editingGameId: null,
+  collapsedCategories: new Set([...GAME_CATEGORIES, 'Uncategorized']),
   chartMode: 'scatter',
   chartMetric: 'fgpct',
   chartBaseline: 'self',
@@ -211,6 +213,12 @@ el('game-list').addEventListener('click', (event) => {
     }
     return;
   }
+  const editBtn = event.target.closest('[data-edit-id]');
+  if (editBtn) {
+    const game = state.games.find((g) => g.id === editBtn.dataset.editId);
+    if (game) openEditGameForm(game);
+    return;
+  }
   const selectBtn = event.target.closest('[data-select-id]');
   if (!selectBtn) return;
   const game = state.games.find((g) => g.id === selectBtn.dataset.selectId);
@@ -238,10 +246,53 @@ document.querySelectorAll('[data-nav]').forEach((btn) => {
   });
 });
 
-el('new-game-open-btn').addEventListener('click', () => {
+function setCategoryButtons(category) {
+  document.querySelectorAll('#category-group button').forEach((b) => b.classList.toggle('active', b.dataset.category === category));
+}
+
+function setPeriodModeButtons(mode) {
+  document.querySelectorAll('#period-mode-group button').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+}
+
+// The New Game screen doubles as the Edit Game screen (same fields minus period mode,
+// which only makes sense to choose once at the start of live tracking) - these two
+// entry points make sure state/inputs always start from a clean, correct slate instead
+// of leaking values from whichever game was last created or edited.
+function openNewGameForm() {
+  state.editingGameId = null;
+  state.periodMode = 'full';
+  state.category = 'Season';
   el('new-game-player-name').textContent = PLAYER_NAME;
+  el('new-game-title').textContent = 'New game';
+  el('ng-opponent').value = '';
+  el('ng-venue').value = '';
+  el('ng-league').value = '';
+  el('ng-date').value = '';
+  el('ng-time').value = '';
+  setCategoryButtons(state.category);
+  setPeriodModeButtons(state.periodMode);
+  el('period-mode-panel').classList.remove('hidden');
+  el('start-tracking-btn').textContent = 'Start tracking';
   showScreen('new-game');
-});
+}
+
+function openEditGameForm(game) {
+  state.editingGameId = game.id;
+  state.category = game.category || '';
+  el('new-game-player-name').textContent = PLAYER_NAME;
+  el('new-game-title').textContent = 'Edit game';
+  el('ng-opponent').value = game.opponent || '';
+  el('ng-venue').value = game.venue || '';
+  el('ng-league').value = game.league || '';
+  el('ng-date').value = game.date || '';
+  el('ng-time').value = game.time || '';
+  setCategoryButtons(state.category);
+  el('period-mode-panel').classList.add('hidden');
+  el('start-tracking-btn').textContent = 'Save changes';
+  showScreen('new-game');
+}
+
+el('new-game-open-btn').addEventListener('click', openNewGameForm);
 
 el('copy-link-btn').addEventListener('click', async () => {
   try {
@@ -272,17 +323,28 @@ document.querySelectorAll('#category-group button').forEach((btn) => {
 });
 
 el('start-tracking-btn').addEventListener('click', async () => {
-  const meta = {
-    name: `Game ${state.games.length + 1}`,
+  const info = {
     opponent: el('ng-opponent').value.trim(),
     venue: el('ng-venue').value.trim(),
     league: el('ng-league').value.trim(),
     category: state.category,
     date: el('ng-date').value,
-    time: el('ng-time').value,
-    periodMode: state.periodMode
+    time: el('ng-time').value
   };
-  const docRef = await createGame(state.scopeId, meta);
+
+  if (state.editingGameId) {
+    await updateGameMeta(state.scopeId, state.editingGameId, info);
+    state.editingGameId = null;
+    showScreen('games');
+    setActiveNav('games');
+    return;
+  }
+
+  const docRef = await createGame(state.scopeId, {
+    name: `Game ${state.games.length + 1}`,
+    ...info,
+    periodMode: state.periodMode
+  });
   state.selectedGameId = docRef.id;
   state.pendingShot = null;
   showScreen('live');
